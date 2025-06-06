@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
@@ -21,7 +21,6 @@ import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ReimbursementManagement from './components/ReimbursementManagement';
 import PrivateRoute from './components/PrivateRoute';
-import ForcePasswordChange from './components/ForcePasswordChange';
 
 // Tema personalizado
 const theme = createTheme({
@@ -61,7 +60,6 @@ const theme = createTheme({
 
 function App() {
   const { isAuthenticated, user, loading } = useAuth();
-  const location = useLocation();
   console.log('App Estado:', { 
     isAuthenticated, 
     user, 
@@ -157,10 +155,6 @@ function App() {
         </Box>
       </ThemeProvider>
     );
-  }
-
-  if (isAuthenticated && user?.cambiarContrasena && location.pathname !== '/login') {
-    return <ForcePasswordChange />;
   }
 
   console.log('App: Renderizando rutas...');

@@ -82,7 +82,7 @@ const InsuranceManagement = () => {
 
   const handleOpenDialog = (insurance = null) => {
     if (insurance) {
-      setSelectedInsurance(insurance);
+    setSelectedInsurance(insurance);
       setFormData({
         nombre: insurance.nombre,
         tipo_seguro_id: insurance.tipo_seguro_id,
@@ -253,9 +253,9 @@ const InsuranceManagement = () => {
       </TableContainer>
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
+            <DialogTitle>
           {selectedInsurance ? 'Editar Seguro' : 'Nuevo Seguro'}
-        </DialogTitle>
+            </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -362,8 +362,8 @@ const InsuranceManagement = () => {
               </FormControl>
             </Grid>
           </Grid>
-        </DialogContent>
-        <DialogActions>
+            </DialogContent>
+            <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
           <Button
             onClick={handleSubmit}
@@ -373,7 +373,7 @@ const InsuranceManagement = () => {
           >
             {loading ? 'Procesando...' : selectedInsurance ? 'Actualizar' : 'Crear'}
           </Button>
-        </DialogActions>
+            </DialogActions>
       </Dialog>
 
       <Snackbar

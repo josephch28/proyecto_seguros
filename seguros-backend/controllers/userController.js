@@ -64,13 +64,13 @@ const createUser = async (req, res) => {
 
         try {
             // Hash de la contraseña
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(contrasena, salt);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(contrasena, salt);
 
             // Insertar usuario (sin el campo cargo)
             const [result] = await connection.query(`
                 INSERT INTO usuarios (
-                    nombre, apellido, nombre_usuario, correo, contrasena,
+                nombre, apellido, nombre_usuario, correo, contrasena,
                     provincia, canton, direccion, telefono, rol_id, cambiar_contrasena
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)
             `, [nombre, apellido, nombre_usuario, correo, hashedPassword, provincia, canton, direccion, telefono, rol_id]);
@@ -89,9 +89,8 @@ const createUser = async (req, res) => {
             }
 
             await connection.commit();
-            res.status(201).json({
-                success: true,
-                message: 'Usuario creado exitosamente',
+        res.status(201).json({
+            message: 'Usuario creado exitosamente',
                 id: userId
             });
         } catch (error) {
@@ -102,10 +101,7 @@ const createUser = async (req, res) => {
         }
     } catch (error) {
         console.error('Error al crear usuario:', error);
-        res.status(500).json({ 
-            success: false,
-            message: 'Error en el servidor' 
-        });
+        res.status(500).json({ message: 'Error en el servidor' });
     }
 };
 
@@ -144,15 +140,15 @@ const updateUser = async (req, res) => {
         try {
             // Actualizar usuario
             await connection.query(`
-                UPDATE usuarios 
-                SET nombre = ?,
-                    apellido = ?,
-                    nombre_usuario = ?,
-                    correo = ?,
-                    provincia = ?,
-                    canton = ?,
-                    direccion = ?,
-                    telefono = ?,
+            UPDATE usuarios 
+            SET nombre = ?, 
+                apellido = ?, 
+                nombre_usuario = ?, 
+                correo = ?, 
+                provincia = ?, 
+                canton = ?, 
+                direccion = ?, 
+                telefono = ?, 
                     rol_id = ?,
                     estado = ?
                 WHERE id = ?
@@ -246,8 +242,8 @@ const getUserById = async (req, res) => {
                        WHEN r.nombre = 'administrador' THEN a.cargo
                        ELSE NULL
                    END as cargo
-            FROM usuarios u
-            JOIN roles r ON u.rol_id = r.id
+            FROM usuarios u 
+            JOIN roles r ON u.rol_id = r.id 
             LEFT JOIN administradores a ON u.id = a.usuario_id
             WHERE u.id = ?
         `, [id]);
@@ -258,7 +254,7 @@ const getUserById = async (req, res) => {
 
         const user = users[0];
         console.log('Datos del usuario encontrado:', user);
-
+        
         res.json({
             success: true,
             user: {
@@ -311,10 +307,10 @@ const updateProfile = async (req, res) => {
 
         try {
             let updateFields = {
-                nombre,
-                apellido,
-                nombre_usuario,
-                correo,
+            nombre,
+            apellido,
+            nombre_usuario,
+            correo,
                 provincia,
                 canton,
                 direccion,
@@ -351,7 +347,7 @@ const updateProfile = async (req, res) => {
                 }
 
                 // Hash de la nueva contraseña
-                const salt = await bcrypt.genSalt(10);
+            const salt = await bcrypt.genSalt(10);
                 const hashedPassword = await bcrypt.hash(nueva_contrasena, salt);
                 updateFields.contrasena = hashedPassword;
                 updateFields.cambiar_contrasena = false;
@@ -378,16 +374,16 @@ const updateProfile = async (req, res) => {
             // Obtener los datos actualizados del usuario
             const [updatedUser] = await connection.query(`
                 SELECT u.*, r.nombre as rol_nombre
-                FROM usuarios u
-                JOIN roles r ON u.rol_id = r.id
+            FROM usuarios u 
+            JOIN roles r ON u.rol_id = r.id 
                 WHERE u.id = ?
             `, [id]);
 
             await connection.commit();
 
-            res.json({ 
+        res.json({ 
                 success: true,
-                message: 'Perfil actualizado exitosamente',
+            message: 'Perfil actualizado exitosamente',
                 user: {
                     ...updatedUser[0],
                     cambiarContrasena: Boolean(updatedUser[0].cambiar_contrasena)
@@ -444,7 +440,7 @@ const getClients = async (req, res) => {
       success: false,
       message: 'Error al obtener la lista de clientes' 
     });
-  }
+    }
 };
 
 module.exports = {

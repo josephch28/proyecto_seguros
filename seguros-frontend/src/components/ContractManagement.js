@@ -558,8 +558,8 @@ const ContractManagement = () => {
           )}
 
           <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
+        <Table>
+          <TableHead>
                 <TableRow>
                   <TableCell>ID</TableCell>
                   <TableCell>Cliente</TableCell>
@@ -567,32 +567,32 @@ const ContractManagement = () => {
                   <TableCell>Fecha Inicio</TableCell>
                   <TableCell>Fecha Fin</TableCell>
                   <TableCell>Monto Prima</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+              <TableCell>Estado</TableCell>
+              <TableCell>Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
                 {contracts.length > 0 ? (
                   contracts.map((contract) => (
-                    <TableRow key={contract.id}>
+              <TableRow key={contract.id}>
                       <TableCell>{contract.id}</TableCell>
                       <TableCell>{contract.cliente?.nombre || contract.nombre_cliente || 'N/A'}</TableCell>
                       <TableCell>{contract.seguro?.nombre || contract.nombre_seguro || 'N/A'}</TableCell>
-                      <TableCell>{new Date(contract.fecha_inicio).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(contract.fecha_inicio).toLocaleDateString()}</TableCell>
                       <TableCell>{new Date(contract.fecha_fin).toLocaleDateString()}</TableCell>
                       <TableCell>${contract.monto_prima}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={contract.estado}
+                <TableCell>
+                  <Chip
+                    label={contract.estado}
                           color={
                             contract.estado === 'activo' ? 'success' :
                             contract.estado === 'pendiente' ? 'warning' :
                             contract.estado === 'rechazado' ? 'error' :
                             'default'
                           }
-                        />
-                      </TableCell>
-                      <TableCell>
+                  />
+                </TableCell>
+                <TableCell>
                         {userRole === 'agente' ? (
                           <>
                             <IconButton onClick={() => handleOpenDialog(contract)}>
@@ -605,7 +605,7 @@ const ContractManagement = () => {
                         ) : (
                           <Button
                             variant="outlined"
-                            size="small"
+                      size="small"
                             onClick={() => handleOpenDialog(contract)}
                           >
                             Completar Documentos
@@ -813,8 +813,8 @@ const ContractManagement = () => {
                 )}
 
                 {/* Sección de Documentos del Cliente (solo visible cuando se está editando un contrato) */}
-                {selectedContract && (
-                  <>
+        {selectedContract && (
+          <>
                     <Grid item xs={12}>
                       <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                         Documentos del Cliente
@@ -823,9 +823,9 @@ const ContractManagement = () => {
 
                     {/* Historia Médica */}
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                         Historia Médica
-                      </Typography>
+                </Typography>
                       {selectedContract.historia_medica ? (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                           <Alert severity="success" sx={{ flex: 1 }}>
@@ -848,9 +848,9 @@ const ContractManagement = () => {
 
                     {/* Beneficiarios */}
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                         Beneficiarios
-                      </Typography>
+                </Typography>
                       {selectedContract.beneficiarios?.length > 0 ? (
                         <List>
                           {selectedContract.beneficiarios.map((beneficiary, index) => (
@@ -871,9 +871,9 @@ const ContractManagement = () => {
 
                     {/* Firma */}
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                         Firma del Cliente
-                      </Typography>
+                </Typography>
                       {selectedContract.firma_cliente ? (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <Alert severity="success">
@@ -901,7 +901,7 @@ const ContractManagement = () => {
 
                     {/* Acciones de Aprobación */}
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                         Acciones
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1020,12 +1020,12 @@ const ContractManagement = () => {
                 <Grid item xs={12}>
                   <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                     Documentos Requeridos
-                  </Typography>
+                </Typography>
                 </Grid>
 
                 {/* Historia Médica */}
                 <Grid item xs={12}>
-                  <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                     Historia Médica
                   </Typography>
                   {selectedContract?.historia_medica ? (
@@ -1053,7 +1053,7 @@ const ContractManagement = () => {
                       {medicalHistory && (
                         <Typography variant="body2" sx={{ mt: 1 }}>
                           Archivo seleccionado: {medicalHistory.name}
-                        </Typography>
+                </Typography>
                       )}
                     </>
                   )}
@@ -1061,9 +1061,9 @@ const ContractManagement = () => {
 
                 {/* Beneficiarios */}
                 <Grid item xs={12}>
-                  <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                     Beneficiarios
-                  </Typography>
+                </Typography>
                   {selectedContract?.beneficiarios?.length > 0 ? (
                     <List>
                       {selectedContract.beneficiarios.map((beneficiary, index) => (
@@ -1127,7 +1127,7 @@ const ContractManagement = () => {
 
                 {/* Firma */}
                 <Grid item xs={12}>
-                  <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom>
                     Firma del Cliente
                   </Typography>
                   {selectedContract?.firma_cliente ? (
@@ -1181,8 +1181,8 @@ const ContractManagement = () => {
                             }}
                           >
                             Firma aquí
-                          </Typography>
-                        </Box>
+                </Typography>
+              </Box>
                       </Paper>
                       <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
                         <Button
@@ -1210,8 +1210,8 @@ const ContractManagement = () => {
                           Firma capturada correctamente
                         </Alert>
                       )}
-                    </>
-                  )}
+          </>
+        )}
                 </Grid>
 
                 {/* Botón para ver historia médica */}
@@ -1228,18 +1228,18 @@ const ContractManagement = () => {
               </>
             )}
           </Grid>
-        </DialogContent>
-        <DialogActions>
+            </DialogContent>
+            <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button 
+              <Button
             onClick={handleSubmit} 
-            variant="contained" 
+                variant="contained"
             color="primary"
             disabled={loading}
-          >
+              >
             {loading ? 'Procesando...' : 'Guardar'}
-          </Button>
-        </DialogActions>
+              </Button>
+            </DialogActions>
       </Dialog>
 
       <Snackbar
