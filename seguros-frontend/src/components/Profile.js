@@ -22,7 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import CloseIcon from '@mui/icons-material/Close';
 
 const Profile = ({ open, onClose }) => {
-  const { user: authUser, checkAuth } = useAuth();
+  const { user: authUser, checkAuth, updateUserProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -284,11 +284,11 @@ const Profile = ({ open, onClose }) => {
     try {
       setLoading(true);
       setError(null);
-      setSuccess(null);
+      setSuccess('');
 
       const formDataToSend = new FormData();
       Object.keys(formData).forEach(key => {
-        if (formData[key] !== null && formData[key] !== undefined) {
+        if (formData[key] !== null && formData[key] !== '') {
           formDataToSend.append(key, formData[key]);
         }
       });
@@ -298,23 +298,23 @@ const Profile = ({ open, onClose }) => {
         formDataToSend,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
           }
         }
       );
 
       if (response.data.success) {
         setSuccess('Perfil actualizado exitosamente');
-        // Actualizar los datos del usuario en el contexto
-        if (checkAuth) {
-          await checkAuth();
-        }
+        // Actualizar el contexto con los nuevos datos del usuario
+        updateUserProfile(response.data.user);
+        // Recargar los datos del usuario
+        await fetchUserData();
       } else {
-        setError(response.data.message || 'Error al actualizar el perfil');
+        throw new Error(response.data.message || 'Error al actualizar el perfil');
       }
     } catch (error) {
-      console.error('Error al actualizar perfil:', error);
+      console.error('Error updating profile:', error);
       setError(error.response?.data?.message || 'Error al actualizar el perfil');
     } finally {
       setLoading(false);

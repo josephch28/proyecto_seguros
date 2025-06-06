@@ -57,8 +57,11 @@ const Layout = ({ children }) => {
     console.log('Layout - User data:', user);
     console.log('Layout - Profile image URL:', user?.foto_perfil);
     if (user?.foto_perfil) {
+      // Agregar timestamp para evitar caché
+      const imageUrl = `${user.foto_perfil}${user.foto_perfil.includes('?') ? '&' : '?'}t=${new Date().getTime()}`;
+      
       // Verificar si la imagen existe
-      fetch(user.foto_perfil)
+      fetch(imageUrl)
         .then(response => {
           if (!response.ok) {
             console.error('Layout - Error loading image:', response.status);
@@ -73,6 +76,8 @@ const Layout = ({ children }) => {
           console.error('Layout - Error fetching image:', error);
           setAvatarError(true);
         });
+    } else {
+      setAvatarError(true);
     }
   }, [user?.foto_perfil]);
 
@@ -260,6 +265,30 @@ const Layout = ({ children }) => {
     </>
   );
 
+  const renderAvatar = () => {
+    if (loading) {
+      return <CircularProgress size={24} />;
+    }
+
+    if (user?.foto_perfil && !avatarError) {
+      return (
+        <Avatar
+          key={avatarKey}
+          src={user.foto_perfil}
+          alt={user.nombre || 'Usuario'}
+          onError={handleAvatarError}
+          sx={{ width: 40, height: 40, cursor: 'pointer' }}
+        />
+      );
+    }
+
+    return (
+      <Avatar sx={{ width: 40, height: 40, cursor: 'pointer', bgcolor: theme.palette.primary.main }}>
+        {user?.nombre ? user.nombre.charAt(0).toUpperCase() : <PersonIcon />}
+      </Avatar>
+    );
+  };
+
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -305,22 +334,7 @@ const Layout = ({ children }) => {
                 '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.2)' }
               }}
             >
-              <Avatar 
-                key={avatarKey}
-                sx={{ 
-                  bgcolor: '#2c5282',
-                  width: 40,
-                  height: 40
-                }}
-                src={!avatarError && user?.foto_perfil ? user.foto_perfil : undefined}
-                onError={handleAvatarError}
-                imgProps={{
-                  crossOrigin: "anonymous",
-                  referrerPolicy: "no-referrer"
-                }}
-              >
-                {(!user?.foto_perfil || avatarError) && user?.nombre?.charAt(0)?.toUpperCase()}
-              </Avatar>
+              {renderAvatar()}
             </IconButton>
           </Box>
           <Menu

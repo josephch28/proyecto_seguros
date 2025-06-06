@@ -170,36 +170,36 @@ const Sidebar = ({ open, onClose, variant = "permanent" }) => {
 
 
           return (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                onClick={() => handleNavigation(item.path)}
-                selected={location.pathname === item.path}
-                sx={{
-                  '&.Mui-selected': {
-                    backgroundColor: 'rgba(30, 58, 95, 0.08)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(30, 58, 95, 0.12)',
-                    },
-                  },
+          <ListItem key={item.path} disablePadding>
+            <ListItemButton
+              onClick={() => handleNavigation(item.path)}
+              selected={location.pathname === item.path}
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: 'rgba(30, 58, 95, 0.08)',
                   '&:hover': {
-                    backgroundColor: 'rgba(30, 58, 95, 0.04)',
+                    backgroundColor: 'rgba(30, 58, 95, 0.12)',
+                  },
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(30, 58, 95, 0.04)',
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: '#1e3a5f' }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText 
+                primary={item.text}
+                sx={{
+                  '& .MuiListItemText-primary': {
+                    color: '#1e3a5f',
+                    fontWeight: location.pathname === item.path ? 600 : 400,
                   },
                 }}
-              >
-                <ListItemIcon sx={{ color: '#1e3a5f' }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText 
-                  primary={item.text}
-                  sx={{
-                    '& .MuiListItemText-primary': {
-                      color: '#1e3a5f',
-                      fontWeight: location.pathname === item.path ? 600 : 400,
-                    },
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
+              />
+            </ListItemButton>
+          </ListItem>
           );
         })}
       </List>

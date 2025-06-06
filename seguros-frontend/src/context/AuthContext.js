@@ -197,7 +197,12 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout: handleLogout,
-    checkAuth
+    checkAuth,
+    updateUserProfile: (newUserData) => {
+      const normalizedData = normalizeUserData(newUserData);
+      setUser(normalizedData);
+      localStorage.setItem('user', JSON.stringify(normalizedData));
+    }
   };
 
   return (

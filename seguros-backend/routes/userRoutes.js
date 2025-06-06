@@ -13,7 +13,7 @@ const {
   getUsersByRole,
   getClients
 } = require('../controllers/userController');
-const { verifyAdmin } = require('../middlewares/authMiddleware');
+const { verifyAdmin, verifyToken } = require('../middlewares/authMiddleware');
 const { 
   validateUserInput, 
   validateId 
@@ -49,8 +49,8 @@ router.get('/roles', verifyAdmin, getRoles);
 router.get('/users', verifyAdmin, getUsersByRole);
 router.get('/clientes', getClients);
 
-// Rutas de perfil
-router.put('/profile', [upload.single('foto_perfil'), validateUserInput], updateProfile);
+// Rutas de perfil (protegidas por verifyToken)
+router.put('/profile', [verifyToken, upload.single('foto_perfil'), validateUserInput], updateProfile);
 
 // Rutas protegidas que requieren rol de administrador
 router.get('/', verifyAdmin, getUsers);

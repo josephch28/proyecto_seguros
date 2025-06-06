@@ -90,6 +90,7 @@ const createUser = async (req, res) => {
 
             await connection.commit();
             res.status(201).json({
+                success: true,
                 message: 'Usuario creado exitosamente',
                 id: userId
             });
@@ -101,7 +102,10 @@ const createUser = async (req, res) => {
         }
     } catch (error) {
         console.error('Error al crear usuario:', error);
-        res.status(500).json({ message: 'Error en el servidor' });
+        res.status(500).json({ 
+            success: false,
+            message: 'Error en el servidor' 
+        });
     }
 };
 
@@ -275,6 +279,8 @@ const updateProfile = async (req, res) => {
         const {
             nombre,
             apellido,
+            nombre_usuario,
+            correo,
             provincia,
             canton,
             direccion,
@@ -284,10 +290,10 @@ const updateProfile = async (req, res) => {
         } = req.body;
 
         // Validar campos requeridos
-        if (!nombre || !apellido) {
+        if (!nombre || !apellido || !nombre_usuario || !correo) {
             return res.status(400).json({ 
                 success: false,
-                message: 'Nombre y apellido son requeridos' 
+                message: 'Nombre, apellido, nombre de usuario y correo son requeridos' 
             });
         }
 
@@ -299,70 +305,100 @@ const updateProfile = async (req, res) => {
             });
         }
 
-        // Si se proporciona nueva contraseña, verificar la actual
-        if (nueva_contrasena) {
-            if (!contrasena_actual) {
-                return res.status(400).json({ 
-                    success: false,
-                    message: 'La contraseña actual es requerida' 
-                });
+        // Iniciar transacción
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            let updateFields = {
+                nombre,
+                apellido,
+                nombre_usuario,
+                correo,
+                provincia,
+                canton,
+                direccion,
+                telefono
+            };
+
+            // Si se proporciona nueva contraseña, verificar la actual
+            if (nueva_contrasena) {
+                if (!contrasena_actual) {
+                    return res.status(400).json({ 
+                        success: false,
+                        message: 'La contraseña actual es requerida' 
+                    });
+                }
+
+                const [users] = await connection.query(
+                    'SELECT contrasena FROM usuarios WHERE id = ?',
+                    [id]
+                );
+
+                if (users.length === 0) {
+                    return res.status(404).json({ 
+                        success: false,
+                        message: 'Usuario no encontrado' 
+                    });
+                }
+
+                const validPassword = await bcrypt.compare(contrasena_actual, users[0].contrasena);
+                if (!validPassword) {
+                    return res.status(401).json({ 
+                        success: false,
+                        message: 'Contraseña actual incorrecta' 
+                    });
+                }
+
+                // Hash de la nueva contraseña
+                const salt = await bcrypt.genSalt(10);
+                const hashedPassword = await bcrypt.hash(nueva_contrasena, salt);
+                updateFields.contrasena = hashedPassword;
+                updateFields.cambiar_contrasena = false;
             }
 
-            const [users] = await pool.query(
-                'SELECT contrasena FROM usuarios WHERE id = ?',
-                [id]
+            // Si hay una nueva foto de perfil
+            if (req.file) {
+                updateFields.foto_perfil = req.file.filename;
+            }
+
+            // Construir la consulta SQL dinámicamente
+            const updateQuery = `
+                UPDATE usuarios 
+                SET ${Object.keys(updateFields).map(key => `${key} = ?`).join(', ')}
+                WHERE id = ?
+            `;
+
+            // Ejecutar la actualización
+            await connection.query(
+                updateQuery,
+                [...Object.values(updateFields), id]
             );
 
-            if (users.length === 0) {
-                return res.status(404).json({ 
-                    success: false,
-                    message: 'Usuario no encontrado' 
-                });
-            }
+            // Obtener los datos actualizados del usuario
+            const [updatedUser] = await connection.query(`
+                SELECT u.*, r.nombre as rol_nombre
+                FROM usuarios u
+                JOIN roles r ON u.rol_id = r.id
+                WHERE u.id = ?
+            `, [id]);
 
-            const validPassword = await bcrypt.compare(contrasena_actual, users[0].contrasena);
-            if (!validPassword) {
-                return res.status(401).json({ 
-                    success: false,
-                    message: 'Contraseña actual incorrecta' 
-                });
-            }
+            await connection.commit();
 
-            // Hash de la nueva contraseña
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(nueva_contrasena, salt);
-
-            // Actualizar usuario con nueva contraseña
-            await pool.query(`
-                UPDATE usuarios 
-                SET nombre = ?,
-                    apellido = ?,
-                    provincia = ?,
-                    canton = ?,
-                    direccion = ?,
-                    telefono = ?,
-                    contrasena = ?,
-                    cambiar_contrasena = false
-                WHERE id = ?
-            `, [nombre, apellido, provincia, canton, direccion, telefono, hashedPassword, id]);
-        } else {
-            // Actualizar usuario sin cambiar contraseña
-            await pool.query(`
-                UPDATE usuarios 
-                SET nombre = ?,
-                    apellido = ?,
-                    provincia = ?,
-                    canton = ?,
-                    direccion = ?,
-                    telefono = ?
-                WHERE id = ?
-            `, [nombre, apellido, provincia, canton, direccion, telefono, id]);
+            res.json({ 
+                success: true,
+                message: 'Perfil actualizado exitosamente',
+                user: {
+                    ...updatedUser[0],
+                    cambiarContrasena: Boolean(updatedUser[0].cambiar_contrasena)
+                }
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
-
-        res.json({ 
-            success: true,
-            message: 'Perfil actualizado exitosamente' 
-        });
     } catch (error) {
         console.error('Error al actualizar perfil:', error);
         res.status(500).json({ 
