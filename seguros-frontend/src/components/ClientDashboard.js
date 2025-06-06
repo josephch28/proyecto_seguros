@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   Grid,
+  Paper,
   Card,
   CardContent,
   Table,
@@ -16,12 +16,15 @@ import {
   useMediaQuery,
   CircularProgress,
   Alert,
+  Drawer,
   Stack
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import CaseIcon from '@mui/icons-material/Folder';
 import InsuranceIcon from '@mui/icons-material/Security';
 import DocumentIcon from '@mui/icons-material/Description';
+import { Routes, Route } from 'react-router-dom';
+import ContractManagement from './ContractManagement';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -44,7 +47,7 @@ const StyledCard = styled(Card)(({ theme, color }) => ({
   }
 }));
 
-const ClientDashboard = () => {
+const DashboardContent = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
@@ -264,4 +267,38 @@ const ClientDashboard = () => {
   );
 };
 
-export default ClientDashboard; 
+const ClienteDashboard = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box sx={{ display: 'flex', flex: 1 }}>
+        {/* Contenido principal */}
+        <Box 
+          component="main" 
+          sx={{ 
+            flexGrow: 1, 
+            p: { xs: 2, sm: 3 }, // Padding responsivo
+            backgroundColor: '#fff',
+            width: '100%',
+            overflow: 'auto'
+          }}
+        >
+          <Routes>
+            <Route index element={<DashboardContent />} />
+            <Route path="contracts" element={<ContractManagement />} />
+            <Route path="*" element={<DashboardContent />} />
+          </Routes>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+export default ClienteDashboard; 

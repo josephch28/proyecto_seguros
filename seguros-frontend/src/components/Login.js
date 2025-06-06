@@ -32,6 +32,20 @@ const Login = () => {
 
   useEffect(() => {
     if (loginSuccess && isAuthenticated && user) {
+      console.log('Login - Estado del usuario:', {
+        loginSuccess,
+        isAuthenticated,
+        user,
+        cambiarContrasena: user.cambiarContrasena
+      });
+
+      // Si el usuario necesita cambiar su contraseña, redirigir a la página de cambio de contraseña
+      if (user.cambiarContrasena) {
+        console.log('Login - Usuario necesita cambiar contraseña, redirigiendo...');
+        navigate('/change-password');
+        return;
+      }
+
       const userRole = user.rol_nombre?.toLowerCase();
       if (userRole) {
         let targetPath = '/';
@@ -50,6 +64,7 @@ const Login = () => {
             console.error('Rol no reconocido:', userRole);
             return;
         }
+        console.log('Login - Redirigiendo a:', targetPath);
         navigate(targetPath);
       }
     }

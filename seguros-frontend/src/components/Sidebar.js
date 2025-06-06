@@ -20,6 +20,9 @@ import PeopleIcon from '@mui/icons-material/People';
 import PaymentIcon from '@mui/icons-material/Payment';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import { Link } from 'react-router-dom';
+import LogoutIcon from '@mui/icons-material/Logout';
+import { useAuth } from '../context/AuthContext';
 
 const drawerWidth = 300;
 
@@ -44,35 +47,21 @@ const getIcon = (iconName) => {
   }
 };
 
-const Sidebar = ({ open, onClose, variant = "permanent", role }) => {
+const Sidebar = ({ open, onClose, variant = "permanent" }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth(); // Get user and logout from auth context
+  const userRole = user?.rol_nombre || user?.rol;
 
-  const getMenuItems = () => {
-    switch (role) {
-      case 'asesor':
+  // Use a mapping to get the correct path for each role's dashboard
+  const getDashboardPath = (role) => {
+    switch(role) {
+      case 'administrador': return '/admin';
+      case 'cliente': return '/client';
       case 'agente':
-        return [
-          { text: 'Dashboard', path: '/agent', icon: <DashboardIcon /> },
-          { text: 'Seguros Asignados', path: '/agent/assigned', icon: <AssignmentIcon /> },
-          { text: 'Buscar Casos', path: '/agent/cases', icon: <SearchIcon /> },
-          { text: 'Seguros', path: '/agent/insurances', icon: <SecurityIcon /> }
-        ];
-      case 'administrador':
-        return [
-          { text: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
-          { text: 'Usuarios', path: '/admin/users', icon: <PeopleIcon /> }
-        ];
-      case 'cliente':
-        return [
-          { text: 'Dashboard', path: '/client', icon: <DashboardIcon /> },
-          { text: 'Mis Seguros', path: '/client/insurances', icon: <SecurityIcon /> },
-          { text: 'Pagos', path: '/client/payments', icon: <PaymentIcon /> },
-          { text: 'Contratos', path: '/client/contracts', icon: <DescriptionIcon /> }
-        ];
-      default:
-        return [];
+      case 'asesor': return '/agent';
+      default: return '/'; // Should not happen if roles are handled correctly
     }
   };
 
@@ -82,6 +71,69 @@ const Sidebar = ({ open, onClose, variant = "permanent", role }) => {
       onClose();
     }
   };
+
+  const handleLogout = () => {
+    logout();
+    // Optionally redirect to login page after logout
+    navigate('/login');
+  };
+
+  const menuItems = [
+    {
+      text: 'Dashboard',
+      icon: <DashboardIcon />,
+      path: getDashboardPath(userRole),
+      roles: ['admin', 'agente', 'asesor', 'cliente'] // Visible to all roles
+    },
+    {
+      text: 'Gestión de Seguros',
+      icon: <SecurityIcon />,
+      path: '/agent/insurances', // Agent/Admin specific path
+      roles: ['admin', 'agente']
+    },
+    {
+      text: 'Mis Seguros Asignados', // Specific to agents
+      icon: <AssignmentIcon />,
+      path: '/agent/assigned', // Agent specific path
+      roles: ['agente', 'asesor']
+    },
+     {
+      text: 'Buscar Casos', // Specific to agents/admins
+      icon: <SearchIcon />,
+      path: '/agent/cases', // Agent/Admin specific path
+      roles: ['agente', 'asesor', 'admin']
+    },
+    {
+      text: 'Gestión de Contratos',
+      icon: <DescriptionIcon />,
+      path: '/agent/contracts', // Agent/Admin specific path (assuming different view than client)
+      roles: ['admin', 'agente']
+    },
+    {
+      text: 'Mis Contratos', // Specific to clients
+      icon: <DescriptionIcon />,
+      path: '/client/contracts', // Client specific path
+      roles: ['cliente']
+    },
+    {
+      text: 'Pagos',
+      icon: <PaymentIcon />,
+      path: '/client/payments', // Client specific path
+      roles: ['cliente'] // Solo visible para cliente
+    },
+    {
+      text: 'Reembolsos',
+      icon: <AssignmentIcon />,
+      path: '/client/reimbursements', // Client specific path
+      roles: ['cliente'] // Solo visible para cliente
+    },
+    {
+      text: 'Gestión de Usuarios',
+      icon: <PeopleIcon />,
+      path: '/admin/users', // Admin specific path
+      roles: ['admin'] // Solo visible para admin
+    }
+  ];
 
   const drawer = (
     <>
@@ -101,38 +153,55 @@ const Sidebar = ({ open, onClose, variant = "permanent", role }) => {
       </Box>
       <Divider />
       <List>
-        {getMenuItems().map((item) => (
-          <ListItem key={item.path} disablePadding>
-            <ListItemButton
-              onClick={() => handleNavigation(item.path)}
-              selected={location.pathname === item.path}
-              sx={{
-                '&.Mui-selected': {
-                  backgroundColor: 'rgba(30, 58, 95, 0.08)',
-                  '&:hover': {
-                    backgroundColor: 'rgba(30, 58, 95, 0.12)',
-                  },
-                },
-                '&:hover': {
-                  backgroundColor: 'rgba(30, 58, 95, 0.04)',
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: '#1e3a5f' }}>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText 
-                primary={item.text}
+        {menuItems.map((item) => {
+          // Determine the effective role for filtering
+          const effectiveRole = userRole;
+
+          // If the item has roles defined, check if the user's effective role is included
+          if (item.roles && !item.roles.includes(effectiveRole)) {
+            return null; // Hide the item if the user's role is not in the allowed roles
+          }
+
+           // If no roles are defined for the item, assume it's visible to all roles currently handled.
+           if (!item.roles && effectiveRole && !['cliente', 'agente', 'admin', 'asesor'].includes(effectiveRole)) {
+               // This case handles potential future roles that shouldn't see items without role restrictions
+               return null; // Hide if it has no specific roles and the user's role is not a recognized one
+          }
+
+
+          return (
+            <ListItem key={item.path} disablePadding>
+              <ListItemButton
+                onClick={() => handleNavigation(item.path)}
+                selected={location.pathname === item.path}
                 sx={{
-                  '& .MuiListItemText-primary': {
-                    color: '#1e3a5f',
-                    fontWeight: location.pathname === item.path ? 600 : 400,
+                  '&.Mui-selected': {
+                    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(30, 58, 95, 0.12)',
+                    },
+                  },
+                  '&:hover': {
+                    backgroundColor: 'rgba(30, 58, 95, 0.04)',
                   },
                 }}
-              />
-            </ListItemButton>
-          </ListItem>
-        ))}
+              >
+                <ListItemIcon sx={{ color: '#1e3a5f' }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text}
+                  sx={{
+                    '& .MuiListItemText-primary': {
+                      color: '#1e3a5f',
+                      fontWeight: location.pathname === item.path ? 600 : 400,
+                    },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
     </>
   );

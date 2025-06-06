@@ -1,32 +1,31 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-const PrivateRoute = ({ children, allowedRoles }) => {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+const PrivateRoute = ({ roles }) => {
+  const { user, isAuthenticated } = useAuth();
 
-  if (!token || !user.id) {
-    // Si no hay token o usuario, redirigir al login
-    localStorage.clear(); // Limpiar cualquier dato residual
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(user.rol_nombre)) {
-    // Si el usuario no tiene el rol permitido, redirigir a su dashboard correspondiente
-    switch (user.rol_nombre) {
-      case 'administrador':
-        return <Navigate to="/admin/dashboard" replace />;
-      case 'cliente':
-        return <Navigate to="/cliente/dashboard" replace />;
-      case 'agente':
-        return <Navigate to="/agente/dashboard" replace />;
-      default:
-        localStorage.clear();
-        return <Navigate to="/login" replace />;
-    }
+  if (user?.cambiarContrasena) {
+    return <Navigate to="/change-password" replace />;
   }
 
-  return children;
+  if (roles && !roles.includes(user?.rol_nombre?.toLowerCase())) {
+    // Redirigir al dashboard correspondiente según el rol
+    const dashboardPath = {
+      administrador: '/admin',
+      agente: '/agent',
+      asesor: '/agent',
+      cliente: '/client'
+    }[user?.rol_nombre?.toLowerCase()] || '/login';
+
+    return <Navigate to={dashboardPath} replace />;
+  }
+
+  return <Outlet />;
 };
 
 export default PrivateRoute; 

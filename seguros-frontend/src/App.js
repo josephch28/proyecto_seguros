@@ -16,6 +16,11 @@ import { useAuth } from './context/AuthContext';
 import AgentDashboard from './components/AgentDashboard';
 import AssignedInsurances from './components/AssignedInsurances';
 import CaseSearch from './components/CaseSearch';
+import ChangePassword from './components/ChangePassword';
+import Register from './components/Register';
+import Dashboard from './components/Dashboard';
+import ReimbursementManagement from './components/ReimbursementManagement';
+import PrivateRoute from './components/PrivateRoute';
 
 // Tema personalizado
 const theme = createTheme({
@@ -206,6 +211,27 @@ function App() {
             }
           />
 
+          {/* Ruta de cambio de contraseña */}
+          <Route
+            path="/change-password"
+            element={
+              (() => {
+                if (!isAuthenticated || !user) {
+                  console.log('ChangePassword: Usuario no autenticado, redirigiendo a login');
+                  return <Navigate to="/login" replace />;
+                }
+                if (!user.cambiarContrasena) {
+                  console.log('ChangePassword: Usuario no necesita cambiar contraseña, redirigiendo a dashboard');
+                  const userRole = getUserRole(user);
+                  const redirectPath = getRedirectPath(userRole);
+                  return <Navigate to={redirectPath} replace />;
+                }
+                console.log('ChangePassword: Mostrando página de cambio de contraseña');
+                return <ChangePassword />;
+              })()
+            }
+          />
+
           {/* Rutas para administrador */}
           <Route
             path="/admin"
@@ -224,6 +250,14 @@ function App() {
             }
           />
           <Route
+            path="/admin/insurances"
+            element={
+              <PrivateRoute allowedRoles={['administrador']}>
+                <InsuranceManagement />
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/admin/cases"
             element={
               <PrivateRoute allowedRoles={['administrador']}>
@@ -232,10 +266,18 @@ function App() {
             }
           />
           <Route
-            path="/admin/insurances"
+            path="/admin/contracts"
             element={
               <PrivateRoute allowedRoles={['administrador']}>
-                <InsuranceManagement />
+                <ContractManagement />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/reimbursements"
+            element={
+              <PrivateRoute allowedRoles={['administrador']}>
+                <ReimbursementManagement />
               </PrivateRoute>
             }
           />
@@ -246,14 +288,6 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['cliente']}>
                 <ClientDashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/client/insurances"
-            element={
-              <PrivateRoute allowedRoles={['cliente']}>
-                <InsuranceManagement />
               </PrivateRoute>
             }
           />
@@ -273,20 +307,36 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/client/reimbursements"
+            element={
+              <PrivateRoute allowedRoles={['cliente']}>
+                <ReimbursementManagement />
+              </PrivateRoute>
+            }
+          />
 
-          {/* Rutas para asesor */}
+          {/* Rutas para agente */}
           <Route
             path="/agent"
             element={
-              <PrivateRoute allowedRoles={['asesor', 'agente']}>
+              <PrivateRoute allowedRoles={['agente', 'asesor']}>
                 <AgentDashboard />
               </PrivateRoute>
             }
           />
           <Route
+             path="/agent/insurances"
+             element={
+               <PrivateRoute allowedRoles={['agente', 'admin']}> 
+                 <InsuranceManagement />
+               </PrivateRoute>
+             }
+           />
+          <Route
             path="/agent/assigned"
             element={
-              <PrivateRoute allowedRoles={['asesor', 'agente']}>
+              <PrivateRoute allowedRoles={['agente', 'asesor']}>
                 <AssignedInsurances />
               </PrivateRoute>
             }
@@ -294,16 +344,34 @@ function App() {
           <Route
             path="/agent/cases"
             element={
-              <PrivateRoute allowedRoles={['asesor', 'agente']}>
+              <PrivateRoute allowedRoles={['agente', 'asesor', 'admin']}>
                 <CaseSearch />
               </PrivateRoute>
             }
           />
           <Route
-            path="/agent/insurances"
+            path="/agent/contracts"
             element={
-              <PrivateRoute allowedRoles={['asesor', 'agente']}>
-                <InsuranceManagement />
+              <PrivateRoute allowedRoles={['agente', 'admin']}> 
+                <ContractManagement />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Rutas comunes */}
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <Profile />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PrivateRoute allowedRoles={['administrador']}>
+                <Register />
               </PrivateRoute>
             }
           />

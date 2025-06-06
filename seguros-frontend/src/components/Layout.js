@@ -17,7 +17,8 @@ import {
   useMediaQuery,
   CssBaseline,
   CircularProgress,
-  Divider
+  Divider,
+  Button
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -29,7 +30,9 @@ import {
   Search as SearchIcon,
   Dashboard as DashboardIcon,
   Assignment as AssignmentIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  LocalHospital as HealthIcon,
+  Favorite as LifeIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -48,6 +51,7 @@ const Layout = ({ children }) => {
   const [openProfile, setOpenProfile] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [avatarKey, setAvatarKey] = useState(0);
+  const [userRole, setUserRole] = useState('');
 
   useEffect(() => {
     console.log('Layout - User data:', user);
@@ -72,6 +76,14 @@ const Layout = ({ children }) => {
     }
   }, [user?.foto_perfil]);
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const decodedToken = JSON.parse(atob(token.split('.')[1]));
+      setUserRole(decodedToken.rol);
+    }
+  }, []);
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
@@ -87,6 +99,7 @@ const Layout = ({ children }) => {
   const handleLogout = () => {
     handleProfileMenuClose();
     logout();
+    localStorage.removeItem('token');
     navigate('/login');
   };
 
@@ -101,33 +114,96 @@ const Layout = ({ children }) => {
   };
 
   const getMenuItems = () => {
-    const userRole = user?.rol_nombre?.toLowerCase() || user?.rol?.toLowerCase();
-    
+    const items = [];
+
+    // Items comunes para todos los roles
+    items.push({
+      text: 'Dashboard',
+      icon: <DashboardIcon />,
+      path: getDashboardPath(userRole)
+    });
+
+    // Items específicos por rol
     switch (userRole) {
-      case 'asesor':
-      case 'agente':
-        return [
-          { text: 'Dashboard', path: '/agent', icon: <DashboardIcon /> },
-          { text: 'Seguros Asignados', path: '/agent/assigned', icon: <AssignmentIcon /> },
-          { text: 'Buscar Casos', path: '/agent/cases', icon: <SearchIcon /> },
-          { text: 'Seguros', path: '/agent/insurances', icon: <SecurityIcon /> }
-        ];
       case 'administrador':
-        return [
-          { text: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
-          { text: 'Usuarios', path: '/admin/users', icon: <PeopleIcon /> },
-          { text: 'Buscar Casos', path: '/admin/cases', icon: <SearchIcon /> },
-          { text: 'Seguros', path: '/admin/insurances', icon: <SecurityIcon /> }
-        ];
+        items.push(
+          {
+            text: 'Gestión de Usuarios',
+            icon: <PeopleIcon />,
+            path: '/admin/users'
+          },
+          {
+            text: 'Gestión de Seguros',
+            icon: <SecurityIcon />,
+            path: '/admin/insurances'
+          }
+        );
+        break;
+      case 'agente':
+      case 'asesor':
+        items.push(
+          {
+            text: 'Gestión de Clientes',
+            icon: <PeopleIcon />,
+            path: '/agent/clients'
+          },
+          {
+            text: 'Contratación de Seguros',
+            icon: <DescriptionIcon />,
+            path: '/agent/contracts'
+          },
+          {
+            text: 'Reembolsos',
+            icon: <PaymentIcon />,
+            path: '/agent/reimbursements'
+          },
+          {
+            text: 'Reportes',
+            icon: <AssignmentIcon />,
+            path: '/agent/reports'
+          }
+        );
+        break;
       case 'cliente':
-        return [
-          { text: 'Dashboard', path: '/client', icon: <DashboardIcon /> },
-          { text: 'Mis Seguros', path: '/client/insurances', icon: <SecurityIcon /> },
-          { text: 'Pagos', path: '/client/payments', icon: <PaymentIcon /> },
-          { text: 'Contratos', path: '/client/contracts', icon: <DescriptionIcon /> }
-        ];
+        items.push(
+          {
+            text: 'Mis Seguros',
+            icon: <SecurityIcon />,
+            path: '/client/insurances'
+          },
+          {
+            text: 'Mis Contratos',
+            icon: <DescriptionIcon />,
+            path: '/client/contracts'
+          },
+          {
+            text: 'Mis Pagos',
+            icon: <PaymentIcon />,
+            path: '/client/payments'
+          },
+          {
+            text: 'Reembolsos',
+            icon: <DescriptionIcon />,
+            path: '/client/reimbursements'
+          }
+        );
+        break;
+    }
+
+    return items;
+  };
+
+  const getDashboardPath = (userRole) => {
+    switch (userRole) {
+      case 'administrador':
+        return '/admin';
+      case 'agente':
+      case 'asesor':
+        return '/agent';
+      case 'cliente':
+        return '/client';
       default:
-        return [];
+        return '/';
     }
   };
 

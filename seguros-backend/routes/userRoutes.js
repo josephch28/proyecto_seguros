@@ -9,7 +9,9 @@ const {
   deleteUser,
   getRoles,
   getUserById,
-  updateProfile
+  updateProfile,
+  getUsersByRole,
+  getClients
 } = require('../controllers/userController');
 const { verifyAdmin } = require('../middlewares/authMiddleware');
 const { 
@@ -42,20 +44,20 @@ const upload = multer({
     }
 });
 
-// Rutas protegidas que requieren rol de administrador
-router.get('/', verifyAdmin, getUsers);
-
-// Ruta para obtener roles - debe ir antes de las rutas con parámetros
+// Rutas específicas primero
 router.get('/roles', verifyAdmin, getRoles);
+router.get('/users', verifyAdmin, getUsersByRole);
+router.get('/clientes', getClients);
 
-router.get('/:id', validateId, getUserById);
-
-router.post('/', [verifyAdmin, validateUserInput], createUser);
-
-// Rutas de perfil (deben ir antes de las rutas con parámetros)
+// Rutas de perfil
 router.put('/profile', [upload.single('foto_perfil'), validateUserInput], updateProfile);
 
-// Rutas con parámetros
+// Rutas protegidas que requieren rol de administrador
+router.get('/', verifyAdmin, getUsers);
+router.post('/', [verifyAdmin, validateUserInput], createUser);
+
+// Rutas con parámetros al final
+router.get('/:id', validateId, getUserById);
 router.put('/:id', [verifyAdmin, validateId, validateUserInput], updateUser);
 router.delete('/:id', [verifyAdmin, validateId], deleteUser);
 

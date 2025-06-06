@@ -19,6 +19,7 @@ import {
 import PhotoCamera from '@mui/icons-material/PhotoCamera';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import CloseIcon from '@mui/icons-material/Close';
 
 const Profile = ({ open, onClose }) => {
   const { user: authUser, checkAuth } = useAuth();
@@ -67,93 +68,43 @@ const Profile = ({ open, onClose }) => {
     try {
       setLoading(true);
       setError(null);
-      setUserData(null);
+      console.log('Profile - Fetching user data for ID:', authUser.id);
       
-      if (!token || !authUser) {
-        console.error('Profile - No hay token o usuario:', { token: !!token, authUser });
-        throw new Error('No se encontró información de autenticación');
-      }
-
-      console.log('Profile - Haciendo petición al servidor para el usuario:', authUser.id);
-      const response = await axios.get(`http://localhost:3001/api/users/${authUser.id}`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      const response = await axios.get(
+        `http://localhost:3001/api/users/${authUser.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
         }
-      });
+      );
 
-      console.log('Profile - Respuesta del servidor:', response.data);
-
+      console.log('Profile - User data response:', response.data);
+      
       if (response.data && response.data.success && response.data.user) {
-        console.log('Profile - Datos de usuario recibidos:', response.data.user);
         const userData = response.data.user;
         setUserData(userData);
-        
-        const cleanedData = {
+        setFormData({
           nombre: userData.nombre || '',
           apellido: userData.apellido || '',
           nombre_usuario: userData.nombre_usuario || '',
           correo: userData.correo || '',
-          contrasena: '',
-          confirmar_contrasena: '',
           provincia: userData.provincia || '',
           canton: userData.canton || '',
           direccion: userData.direccion || '',
           telefono: userData.telefono || '',
           cargo: userData.cargo || '',
-          foto_perfil: null
-        };
-        setFormData(cleanedData);
-
+          foto_perfil: userData.foto_perfil || null
+        });
         if (userData.foto_perfil) {
-          const imageUrl = `http://localhost:3001/uploads/${userData.foto_perfil}`;
-          console.log('Profile - Intentando cargar imagen:', imageUrl);
-          setPreviewUrl(imageUrl);
-          
-          try {
-            const imageResponse = await fetch(imageUrl);
-            if (!imageResponse.ok) {
-              console.error('Profile - La imagen no se pudo cargar:', imageUrl);
-              setPreviewUrl('');
-            }
-          } catch (error) {
-            console.error('Profile - Error al verificar la imagen:', error);
-            setPreviewUrl('');
-          }
-        } else {
-          setPreviewUrl('');
+          setPreviewUrl(`http://localhost:3001/uploads/${userData.foto_perfil}?t=${new Date().getTime()}`);
         }
       } else {
-        console.error('Profile - Respuesta sin datos de usuario:', response.data);
-        throw new Error(response.data?.message || 'No se pudo obtener la información del usuario');
+        throw new Error('No se pudo obtener la información del usuario');
       }
     } catch (error) {
-      console.error('Profile - Error completo:', error);
-      console.error('Profile - Response data:', error.response?.data);
-      console.error('Profile - Response status:', error.response?.status);
-      
-      let errorMessage = 'Error al cargar los datos del usuario';
-      
-      if (error.response) {
-        switch (error.response.status) {
-          case 401:
-            errorMessage = 'Sesión expirada. Por favor, vuelva a iniciar sesión.';
-            break;
-          case 403:
-            errorMessage = 'No tiene permisos para acceder a esta información.';
-            break;
-          case 404:
-            errorMessage = 'Usuario no encontrado.';
-            break;
-          default:
-            errorMessage = error.response.data?.message || 'Error al cargar los datos del usuario';
-        }
-      } else if (error.request) {
-        errorMessage = 'No se pudo conectar con el servidor. Por favor, verifique su conexión.';
-      }
-      
-      setError(errorMessage);
-      setUserData(null);
+      console.error('Profile - Error fetching user data:', error);
+      setError(error.response?.data?.message || 'Error al cargar los datos del usuario');
     } finally {
       setLoading(false);
     }
@@ -328,116 +279,106 @@ const Profile = ({ open, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setFormErrors({
-      nombre: '',
-      apellido: '',
-      nombre_usuario: '',
-      correo: '',
-      telefono: '',
-      contrasena: '',
-      confirmar_contrasena: ''
-    });
-
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+
       const formDataToSend = new FormData();
       Object.keys(formData).forEach(key => {
-        if (key === 'foto_perfil' && formData[key] instanceof File) {
-          formDataToSend.append('foto_perfil', formData[key]);
-        } else if (key !== 'foto_perfil' && formData[key]) {
+        if (formData[key] !== null && formData[key] !== undefined) {
           formDataToSend.append(key, formData[key]);
         }
       });
 
       const response = await axios.put(
-        `http://localhost:3001/api/users/profile`,
+        'http://localhost:3001/api/users/profile',
         formDataToSend,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
           }
         }
       );
 
-      if (response.data.success || response.data.user) {
+      if (response.data.success) {
         setSuccess('Perfil actualizado exitosamente');
-        
-        // Actualizar el contexto de autenticación
-        await checkAuth();
-        
-        // Actualizar el estado local
-        if (response.data.user) {
-          setUserData(response.data.user);
-          if (response.data.user.foto_perfil) {
-            const imageUrl = `http://localhost:3001/uploads/${response.data.user.foto_perfil}`;
-            setPreviewUrl(imageUrl);
-          }
+        // Actualizar los datos del usuario en el contexto
+        if (checkAuth) {
+          await checkAuth();
         }
-        
-        setTimeout(() => {
-          setSuccess('');
-          onClose();
-        }, 1500);
       } else {
-        throw new Error(response.data.message || 'Error al actualizar el perfil');
+        setError(response.data.message || 'Error al actualizar el perfil');
       }
     } catch (error) {
-      console.error('Error al actualizar el perfil:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Error al actualizar el perfil';
-      setError(errorMessage);
+      console.error('Error al actualizar perfil:', error);
+      setError(error.response?.data?.message || 'Error al actualizar el perfil');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <Dialog 
       open={open} 
-      onClose={onClose} 
-      maxWidth="sm" 
+      onClose={onClose}
+      maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          minHeight: '200px', // Asegura una altura mínima para el diálogo
-        }
-      }}
     >
-      <DialogTitle>Mi Perfil</DialogTitle>
+      <DialogTitle>
+        <Typography variant="h6" component="div" sx={{ color: '#1e3a5f', fontWeight: 600 }}>
+          Perfil de Usuario
+        </Typography>
+      </DialogTitle>
       <DialogContent>
-        {loading ? (
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            minHeight: '400px'
-          }}>
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
             <CircularProgress />
           </Box>
-        ) : error ? (
-          <Box sx={{ 
-            p: 3, 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            minHeight: '200px'
-          }}>
-            <Alert 
-              severity="error" 
-              sx={{ 
-                width: '100%',
-                '& .MuiAlert-message': {
-                  width: '100%',
-                  textAlign: 'center'
-                }
-              }}
-            >
-              {error}
-            </Alert>
-          </Box>
-        ) : !userData ? (
+        )}
+
+        {error && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 2 }}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => setError(null)}
+              >
+                <CloseIcon fontSize="inherit" />
+              </IconButton>
+            }
+          >
+            {error}
+          </Alert>
+        )}
+
+        {success && (
+          <Alert 
+            severity="success" 
+            sx={{ mb: 2 }}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={() => setSuccess(null)}
+              >
+                <CloseIcon fontSize="inherit" />
+              </IconButton>
+            }
+          >
+            {success}
+          </Alert>
+        )}
+
+        {!userData && (
           <Box sx={{ 
             p: 3, 
             display: 'flex', 
@@ -458,26 +399,10 @@ const Profile = ({ open, onClose }) => {
               No se encontró información del usuario
             </Alert>
           </Box>
-        ) : (
+        )}
+
+        {userData && (
           <Box component="form" noValidate sx={{ mt: 2 }}>
-            {error && (
-              <Alert 
-                severity="error" 
-                sx={{ mb: 2 }}
-                onClose={() => setError('')}
-              >
-                {error}
-              </Alert>
-            )}
-            {success && (
-              <Alert 
-                severity="success" 
-                sx={{ mb: 2 }}
-                onClose={() => setSuccess('')}
-              >
-                {success}
-              </Alert>
-            )}
             <Grid container spacing={2} alignItems="center" justifyContent="center">
               <Grid item xs={12} display="flex" justifyContent="center">
                 <Box position="relative">

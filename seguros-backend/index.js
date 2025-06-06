@@ -5,6 +5,9 @@ const path = require('path');
 const multer = require('multer');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
+const seguroRoutes = require('./routes/seguroRoutes');
+const contratoRoutes = require('./routes/contratoRoutes');
+const pagoRoutes = require('./routes/pagoRoutes');
 const { verifyToken } = require('./middlewares/authMiddleware');
 const pool = require('./config/database');
 console.log('Tipo de verifyToken:', typeof verifyToken);
@@ -13,13 +16,20 @@ const app = express();
 
 // Configuración de CORS
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
+// Agregar middleware para logging de rutas
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Configuración de multer para subida de archivos
 const storage = multer.diskStorage({
@@ -27,24 +37,11 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/');
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    cb(null, Date.now() + '-' + file.originalname);
   }
 });
 
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // Límite de 5MB
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('El archivo debe ser una imagen'));
-    }
-  }
-});
+const upload = multer({ storage: storage });
 
 // Crear directorio de uploads si no existe
 const fs = require('fs');
@@ -70,6 +67,9 @@ pool.query('SELECT 1')
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', verifyToken, userRoutes);
+app.use('/api/seguros', seguroRoutes);
+app.use('/api/contratos', contratoRoutes);
+app.use('/api/pagos', pagoRoutes);
 
 // Middleware para manejo de errores de multer
 app.use((err, req, res, next) => {

@@ -21,13 +21,14 @@ export const AuthProvider = ({ children }) => {
   const normalizeUserData = (userData) => {
     if (!userData) return null;
     
-    // Asegurarse de que la foto_perfil tenga la URL completa
+    // Asegurarse de que la foto_perfil tenga la URL completa y convertir cambiar_contrasena a booleano
     const normalizedData = {
       ...userData,
       rol_nombre: userData.rol_nombre || userData.rol,
       foto_perfil: userData.foto_perfil ? 
         `http://localhost:3001/uploads/${userData.foto_perfil}?t=${new Date().getTime()}` : 
-        null
+        null,
+      cambiarContrasena: Boolean(userData.cambiar_contrasena || userData.cambiarContrasena)
     };
     
     console.log('Datos normalizados del usuario:', normalizedData);
@@ -121,7 +122,7 @@ export const AuthProvider = ({ children }) => {
       
       if (response.data.success && response.data.token && response.data.user) {
         console.log('Login exitoso, datos del usuario:', response.data.user);
-        console.log('Rol del usuario:', response.data.user.rol_nombre || response.data.user.rol);
+        console.log('Estado de cambio de contraseña:', response.data.user.cambiarContrasena);
         
         // Normalizar los datos del usuario
         const userData = normalizeUserData(response.data.user);
