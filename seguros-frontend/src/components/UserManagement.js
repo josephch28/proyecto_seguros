@@ -25,7 +25,9 @@ import {
   Box,
   useTheme,
   useMediaQuery,
-  FormHelperText
+  FormHelperText,
+  Tabs,
+  Tab
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -40,6 +42,7 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedRole, setSelectedRole] = useState('all');
 
   const initialFormData = {
     nombre: '',
@@ -86,26 +89,39 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
+      console.log('Fetching users...');
       const response = await axios.get('http://localhost:3001/api/users', axiosConfig);
-      setUsers(response.data);
+      console.log('Users response:', response.data);
+      
+      if (response.data && Array.isArray(response.data)) {
+        setUsers(response.data);
+      } else {
+        console.error('Invalid users data format:', response.data);
+        setError('Error: Formato de respuesta de usuarios inválido');
+      }
     } catch (error) {
-      setError('Error al cargar usuarios');
+      console.error('Error fetching users:', error);
+      const errorMessage = error.response?.data?.message || 'Error al cargar usuarios';
+      setError(errorMessage);
     }
   };
 
   const fetchRoles = async () => {
     try {
+      console.log('Fetching roles...');
       const response = await axios.get('http://localhost:3001/api/users/roles', axiosConfig);
+      console.log('Roles response:', response.data);
+      
       if (response.data && Array.isArray(response.data)) {
         setRoles(response.data);
       } else {
+        console.error('Invalid roles data format:', response.data);
         setError('Error: Formato de respuesta de roles inválido');
-        console.error('Respuesta de roles inválida:', response.data);
       }
     } catch (error) {
+      console.error('Error fetching roles:', error);
       const errorMessage = error.response?.data?.message || 'Error al cargar roles';
       setError(errorMessage);
-      console.error('Error al cargar roles:', error);
     }
   };
 
@@ -365,37 +381,49 @@ const UserManagement = () => {
     }
   };
 
-  return (
-    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
-      <Box 
-        display="flex" 
-        flexDirection={{ xs: 'column', sm: 'row' }} 
-        justifyContent="space-between" 
-        alignItems={{ xs: 'stretch', sm: 'center' }} 
-        mb={3}
-        gap={2}
-      >
-        <Typography variant="h4" component="h1">
-          Gestión de Usuarios
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ 
-            bgcolor: '#1e3a5f', 
-            '&:hover': { bgcolor: '#2c5282' },
-            width: { xs: '100%', sm: 'auto' }
-          }}
-        >
-          Nuevo Usuario
-        </Button>
-      </Box>
+  const handleRoleChange = (event, newValue) => {
+    setSelectedRole(newValue);
+  };
 
-      <TableContainer 
+  const getUsersByRole = (role) => {
+    console.log('getUsersByRole - Input role:', role);
+    console.log('getUsersByRole - Current users:', users);
+    
+    if (role === 'all') {
+      return users;
+    }
+
+    const filteredUsers = users.filter(user => {
+      const userRole = user.rol_nombre?.toLowerCase() || user.rol?.toLowerCase();
+      const targetRole = role.toLowerCase();
+      console.log('Comparing roles:', { userRole, targetRole, user });
+      return userRole === targetRole;
+    });
+
+    console.log('getUsersByRole - Filtered users:', filteredUsers);
+    return filteredUsers;
+  };
+
+  const renderUserTable = (roleUsers, roleName) => {
+    console.log('renderUserTable - Role users:', roleUsers);
+    console.log('renderUserTable - Role name:', roleName);
+
+    if (!roleUsers || roleUsers.length === 0) {
+      return (
+        <Box sx={{ p: 2, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            No hay usuarios con el rol de {roleName}
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <TableContainer
         component={Paper}
         sx={{ 
           overflowX: 'auto',
+          mb: 3,
           '& .MuiTable-root': {
             minWidth: { xs: 'auto', sm: 650 }
           }
@@ -412,7 +440,7 @@ const UserManagement = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {users.map((user) => (
+            {roleUsers.map((user) => (
               <TableRow 
                 key={user.id}
                 sx={{
@@ -422,7 +450,7 @@ const UserManagement = () => {
               >
                 <TableCell>{`${user.nombre} ${user.apellido}`}</TableCell>
                 {!isMobile && <TableCell>{user.correo}</TableCell>}
-                <TableCell>{user.rol}</TableCell>
+                <TableCell>{user.rol_nombre || user.rol}</TableCell>
                 <TableCell>
                   <Box
                     component="span"
@@ -462,6 +490,78 @@ const UserManagement = () => {
           </TableBody>
         </Table>
       </TableContainer>
+    );
+  };
+
+  return (
+    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+      <Box 
+        display="flex" 
+        flexDirection={{ xs: 'column', sm: 'row' }} 
+        justifyContent="space-between" 
+        alignItems={{ xs: 'stretch', sm: 'center' }} 
+        mb={3}
+        gap={2}
+      >
+        <Typography variant="h4" component="h1">
+          Gestión de Usuarios
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+          sx={{ 
+            bgcolor: '#1e3a5f', 
+            '&:hover': { bgcolor: '#2c5282' },
+            width: { xs: '100%', sm: 'auto' }
+          }}
+        >
+          Nuevo Usuario
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {success}
+        </Alert>
+      )}
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs 
+          value={selectedRole} 
+          onChange={handleRoleChange}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab label="Todos" value="all" />
+          {roles.map((role) => (
+            <Tab 
+              key={role.id} 
+              label={role.nombre} 
+              value={role.nombre.toLowerCase()} 
+            />
+          ))}
+        </Tabs>
+      </Box>
+
+      {selectedRole === 'all' ? (
+        roles.map((role) => (
+          <Box key={role.id} sx={{ mb: 4 }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#1e3a5f' }}>
+              {role.nombre}
+            </Typography>
+            {renderUserTable(getUsersByRole(role.nombre), role.nombre)}
+          </Box>
+        ))
+      ) : (
+        renderUserTable(getUsersByRole(selectedRole), selectedRole)
+      )}
 
       <Dialog 
         open={openDialog} 
