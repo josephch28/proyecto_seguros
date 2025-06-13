@@ -20,6 +20,7 @@ import ChangePassword from './components/ChangePassword';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ReimbursementManagement from './components/ReimbursementManagement';
+import ClientManagement from './components/ClientManagement';
 
 // Tema personalizado
 const theme = createTheme({
@@ -353,6 +354,14 @@ function App() {
             element={
               <PrivateRoute allowedRoles={['agente', 'admin']}> 
                 <ContractManagement />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/agent/clients"
+            element={
+              <PrivateRoute allowedRoles={['agente']}>
+                <ClientManagement />
               </PrivateRoute>
             }
           />

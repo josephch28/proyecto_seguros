@@ -23,6 +23,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { Link } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../context/AuthContext';
+import { Receipt as ReceiptIcon } from '@mui/icons-material';
 
 const drawerWidth = 300;
 
@@ -78,62 +79,26 @@ const Sidebar = ({ open, onClose, variant = "permanent" }) => {
     navigate('/login');
   };
 
-  const menuItems = [
-    {
-      text: 'Dashboard',
-      icon: <DashboardIcon />,
-      path: getDashboardPath(userRole),
-      roles: ['admin', 'agente', 'asesor', 'cliente'] // Visible to all roles
-    },
-    {
-      text: 'Gestión de Seguros',
-      icon: <SecurityIcon />,
-      path: '/agent/insurances', // Agent/Admin specific path
-      roles: ['admin', 'agente']
-    },
-    {
-      text: 'Mis Seguros Asignados', // Specific to agents
-      icon: <AssignmentIcon />,
-      path: '/agent/assigned', // Agent specific path
-      roles: ['agente', 'asesor']
-    },
-     {
-      text: 'Buscar Casos', // Specific to agents/admins
-      icon: <SearchIcon />,
-      path: '/agent/cases', // Agent/Admin specific path
-      roles: ['agente', 'asesor', 'admin']
-    },
-    {
-      text: 'Gestión de Contratos',
-      icon: <DescriptionIcon />,
-      path: '/agent/contracts', // Agent/Admin specific path (assuming different view than client)
-      roles: ['admin', 'agente']
-    },
-    {
-      text: 'Mis Contratos', // Specific to clients
-      icon: <DescriptionIcon />,
-      path: '/client/contracts', // Client specific path
-      roles: ['cliente']
-    },
-    {
-      text: 'Pagos',
-      icon: <PaymentIcon />,
-      path: '/client/payments', // Client specific path
-      roles: ['cliente'] // Solo visible para cliente
-    },
-    {
-      text: 'Reembolsos',
-      icon: <AssignmentIcon />,
-      path: '/client/reimbursements', // Client specific path
-      roles: ['cliente'] // Solo visible para cliente
-    },
-    {
-      text: 'Gestión de Usuarios',
-      icon: <PeopleIcon />,
-      path: '/admin/users', // Admin specific path
-      roles: ['admin'] // Solo visible para admin
-    }
-  ];
+  const menuItems = {
+    administrador: [
+      { text: 'Dashboard', icon: <DashboardIcon />, path: '/admin' },
+      { text: 'Gestión de Usuarios', icon: <PeopleIcon />, path: '/admin/users' },
+      { text: 'Gestión de Seguros', icon: <SecurityIcon />, path: '/admin/insurances' },
+    ],
+    agente: [
+      { text: 'Dashboard', icon: <DashboardIcon />, path: '/agent' },
+      { text: 'Seguros Asignados', icon: <AssignmentIcon />, path: '/agent/assigned' },
+      { text: 'Búsqueda de Casos', icon: <SearchIcon />, path: '/agent/cases' },
+      { text: 'Gestión de Seguros', icon: <SecurityIcon />, path: '/agent/insurances' },
+      { text: 'Gestión de Clientes', icon: <PeopleIcon />, path: '/agent/clients' },
+    ],
+    cliente: [
+      { text: 'Dashboard', icon: <DashboardIcon />, path: '/client' },
+      { text: 'Mis Contratos', icon: <DescriptionIcon />, path: '/client/contracts' },
+      { text: 'Mis Pagos', icon: <PaymentIcon />, path: '/client/payments' },
+      { text: 'Mis Reembolsos', icon: <ReceiptIcon />, path: '/client/reimbursements' },
+    ],
+  };
 
   const drawer = (
     <>
@@ -153,7 +118,7 @@ const Sidebar = ({ open, onClose, variant = "permanent" }) => {
       </Box>
       <Divider />
       <List>
-        {menuItems.map((item) => {
+        {menuItems[userRole].map((item) => {
           // Determine the effective role for filtering
           const effectiveRole = userRole;
 

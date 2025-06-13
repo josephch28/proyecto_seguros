@@ -13,7 +13,7 @@ const {
   getUsersByRole,
   getClients
 } = require('../controllers/userController');
-const { verifyAdmin, verifyToken } = require('../middlewares/authMiddleware');
+const { verifyAdmin, verifyToken, verifyAgent } = require('../middlewares/authMiddleware');
 const { 
   validateUserInput, 
   validateId 
@@ -47,14 +47,18 @@ const upload = multer({
 // Rutas específicas primero
 router.get('/roles', verifyAdmin, getRoles);
 router.get('/users', verifyAdmin, getUsersByRole);
-router.get('/clientes', getClients);
 
-// Rutas de perfil (protegidas por verifyToken)
-router.put('/profile', [verifyToken, upload.single('foto_perfil'), validateUserInput], updateProfile);
+// Rutas para gestión de clientes por agentes
+router.get('/clientes', verifyToken, getClients);
+router.post('/clientes', verifyToken, verifyAgent, createUser);
+router.put('/clientes/:id', verifyToken, verifyAgent, updateUser);
+router.delete('/clientes/:id', verifyToken, verifyAgent, deleteUser);
 
 // Rutas protegidas que requieren rol de administrador
 router.get('/', verifyAdmin, getUsers);
-router.post('/', [verifyAdmin, validateUserInput], createUser);
+
+// Rutas de perfil (protegidas por verifyToken)
+router.put('/profile', [verifyToken, upload.single('foto_perfil'), validateUserInput], updateProfile);
 
 // Rutas con parámetros al final
 router.get('/:id', validateId, getUserById);

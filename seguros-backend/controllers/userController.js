@@ -37,71 +37,87 @@ const createUser = async (req, res) => {
         const {
             nombre,
             apellido,
-            nombre_usuario,
             correo,
-            contrasena,
-            provincia,
-            canton,
-            direccion,
             telefono,
-            cargo,
-            rol_id
+            direccion,
+            estado,
+            rol,
+            nombre_usuario
         } = req.body;
 
+        console.log('Datos recibidos:', req.body);
+
         // Validar campos requeridos
-        if (!nombre || !apellido || !nombre_usuario || !correo || !contrasena || !rol_id) {
-            return res.status(400).json({ message: 'Todos los campos son requeridos' });
-        }
-
-        // Validar formato de nombres
-        if (!isValidName(nombre) || !isValidName(apellido)) {
-            return res.status(400).json({ message: 'El nombre y apellido solo deben contener letras' });
-        }
-
-        // Iniciar transacción
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
-
-        try {
-            // Hash de la contraseña
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(contrasena, salt);
-
-            // Insertar usuario (sin el campo cargo)
-            const [result] = await connection.query(`
-                INSERT INTO usuarios (
-                nombre, apellido, nombre_usuario, correo, contrasena,
-                    provincia, canton, direccion, telefono, rol_id, cambiar_contrasena
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)
-            `, [nombre, apellido, nombre_usuario, correo, hashedPassword, provincia, canton, direccion, telefono, rol_id]);
-
-            const userId = result.insertId;
-
-            // Si el usuario es administrador, insertar cargo en la tabla administradores
-            if (rol_id === 1) { // Asumiendo que 1 es el ID del rol administrador
-                if (!cargo) {
-                    throw new Error('El cargo es requerido para usuarios administradores');
-                }
-                await connection.query(`
-                    INSERT INTO administradores (usuario_id, cargo)
-                    VALUES (?, ?)
-                `, [userId, cargo]);
-            }
-
-            await connection.commit();
-        res.status(201).json({
-            message: 'Usuario creado exitosamente',
-                id: userId
+        if (!nombre || !apellido || !correo || !telefono || !nombre_usuario) {
+            return res.status(400).json({
+                success: false,
+                message: 'Los campos nombre, apellido, correo, teléfono y nombre de usuario son requeridos'
             });
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
         }
+
+        // Verificar si el correo ya existe
+        const [existingUsers] = await pool.query(
+            'SELECT id FROM usuarios WHERE correo = ? OR nombre_usuario = ?',
+            [correo, nombre_usuario]
+        );
+
+        if (existingUsers.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'El correo electrónico o nombre de usuario ya está registrado'
+            });
+        }
+
+        // Obtener el ID del rol
+        const [roles] = await pool.query(
+            'SELECT id FROM roles WHERE nombre = ?',
+            [rol || 'cliente']
+        );
+
+        if (roles.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Rol no válido'
+            });
+        }
+
+        const rolId = roles[0].id;
+
+        // Contraseña por defecto
+        const contrasena_default = 'Admin123_';
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(contrasena_default, salt);
+
+        // Crear el usuario
+        const [result] = await pool.query(
+            `INSERT INTO usuarios (
+                nombre, apellido, correo, telefono, direccion, 
+                estado, rol_id, nombre_usuario, contrasena, cambiar_contrasena
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)`,
+            [
+                nombre,
+                apellido,
+                correo,
+                telefono,
+                direccion || null,
+                estado || 'activo',
+                rolId,
+                nombre_usuario,
+                hashedPassword
+            ]
+        );
+
+        res.json({
+            success: true,
+            message: 'Usuario creado exitosamente',
+            userId: result.insertId
+        });
     } catch (error) {
         console.error('Error al crear usuario:', error);
-        res.status(500).json({ message: 'Error en el servidor' });
+        res.status(500).json({
+            success: false,
+            message: 'Error al crear el usuario'
+        });
     }
 };
 
@@ -109,94 +125,47 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const {
-            nombre,
-            apellido,
-            nombre_usuario,
-            correo,
-            provincia,
-            canton,
-            direccion,
-            telefono,
-            cargo,
-            rol_id,
-            estado
-        } = req.body;
+        const { nombre, apellido, correo, telefono, direccion, estado } = req.body;
 
         // Validar campos requeridos
-        if (!nombre || !apellido || !nombre_usuario || !correo || !rol_id) {
-            return res.status(400).json({ message: 'Todos los campos son requeridos' });
+        if (!nombre || !apellido || !correo || !telefono) {
+            return res.status(400).json({
+                success: false,
+                message: 'Los campos nombre, apellido, correo y teléfono son requeridos'
+            });
         }
 
-        // Validar formato de nombres
-        if (!isValidName(nombre) || !isValidName(apellido)) {
-            return res.status(400).json({ message: 'El nombre y apellido solo deben contener letras' });
-        }
-
-        // Iniciar transacción
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
-
-        try {
-            // Actualizar usuario
-            await connection.query(`
-            UPDATE usuarios 
+        // Actualizar usuario
+        const [result] = await pool.query(
+            `UPDATE usuarios 
             SET nombre = ?, 
                 apellido = ?, 
-                nombre_usuario = ?, 
                 correo = ?, 
-                provincia = ?, 
-                canton = ?, 
-                direccion = ?, 
                 telefono = ?, 
-                    rol_id = ?,
-                    estado = ?
-                WHERE id = ?
-            `, [nombre, apellido, nombre_usuario, correo, provincia, canton, direccion, telefono, rol_id, estado, id]);
+                direccion = ?, 
+                estado = ?,
+                nombre_usuario = ?
+            WHERE id = ?`,
+            [nombre, apellido, correo, telefono, direccion || null, estado || 'activo', correo, id]
+        );
 
-            // Si el usuario es administrador, actualizar cargo
-            if (rol_id === 1) {
-                if (!cargo) {
-                    throw new Error('El cargo es requerido para usuarios administradores');
-                }
-                // Verificar si ya existe un registro en administradores
-                const [admin] = await connection.query(
-                    'SELECT id FROM administradores WHERE usuario_id = ?',
-                    [id]
-                );
-
-                if (admin.length > 0) {
-                    // Actualizar cargo existente
-                    await connection.query(
-                        'UPDATE administradores SET cargo = ? WHERE usuario_id = ?',
-                        [cargo, id]
-                    );
-                } else {
-                    // Insertar nuevo cargo
-                    await connection.query(
-                        'INSERT INTO administradores (usuario_id, cargo) VALUES (?, ?)',
-                        [id, cargo]
-                    );
-                }
-            } else {
-                // Si no es administrador, eliminar el registro de administradores si existe
-                await connection.query(
-                    'DELETE FROM administradores WHERE usuario_id = ?',
-                    [id]
-                );
-            }
-
-            await connection.commit();
-            res.json({ message: 'Usuario actualizado exitosamente' });
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
         }
+
+        res.json({
+            success: true,
+            message: 'Usuario actualizado exitosamente'
+        });
     } catch (error) {
         console.error('Error al actualizar usuario:', error);
-        res.status(500).json({ message: 'Error en el servidor' });
+        res.status(500).json({
+            success: false,
+            message: 'Error al actualizar el usuario'
+        });
     }
 };
 
@@ -423,10 +392,10 @@ const getUsersByRole = async (req, res) => {
 const getClients = async (req, res) => {
   try {
     const [clients] = await pool.query(`
-      SELECT u.id, u.nombre, u.apellido, u.correo
+      SELECT u.id, u.nombre, u.apellido, u.correo as email, u.telefono, u.estado
       FROM usuarios u
       JOIN roles r ON u.rol_id = r.id
-      WHERE r.nombre = 'cliente' AND u.estado = 'activo'
+      WHERE r.nombre = 'cliente'
       ORDER BY u.nombre, u.apellido
     `);
     
@@ -440,7 +409,7 @@ const getClients = async (req, res) => {
       success: false,
       message: 'Error al obtener la lista de clientes' 
     });
-    }
+  }
 };
 
 module.exports = {

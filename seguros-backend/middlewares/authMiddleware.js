@@ -8,7 +8,7 @@ const verifyToken = async (req, res, next) => {
         if (!token) {
             return res.status(401).json({ 
                 success: false,
-                message: 'Token no proporcionado' 
+                message: 'No se proporcionó token de autenticación' 
             });
         }
 
@@ -19,21 +19,14 @@ const verifyToken = async (req, res, next) => {
         console.error('Error al verificar token:', error);
         res.status(401).json({ 
             success: false,
-            message: 'Token inválido' 
+            message: 'Token inválido o expirado' 
         });
     }
 };
 
 const verifyAdmin = async (req, res, next) => {
     try {
-        const [roles] = await pool.query(`
-            SELECT r.nombre 
-            FROM roles r
-            JOIN usuarios u ON u.rol_id = r.id
-            WHERE u.id = ?
-        `, [req.user.id]);
-
-        if (roles.length === 0 || roles[0].nombre !== 'administrador') {
+        if (req.user.rol !== 'administrador') {
             return res.status(403).json({ 
                 success: false,
                 message: 'Se requieren permisos de administrador' 
@@ -42,6 +35,24 @@ const verifyAdmin = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('Error al verificar rol de administrador:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error al verificar permisos' 
+        });
+    }
+};
+
+const verifyAgent = async (req, res, next) => {
+    try {
+        if (req.user.rol !== 'agente') {
+            return res.status(403).json({ 
+                success: false,
+                message: 'Se requieren permisos de agente' 
+            });
+        }
+        next();
+    } catch (error) {
+        console.error('Error al verificar rol de agente:', error);
         res.status(500).json({ 
             success: false,
             message: 'Error al verificar permisos' 
@@ -129,6 +140,7 @@ const verifyClienteOrAgentOrAdmin = async (req, res, next) => {
 module.exports = {
     verifyToken,
     verifyAdmin,
+    verifyAgent,
     verifyAgentOrAdmin,
     verifyClienteOrAgentOrAdmin
 };
