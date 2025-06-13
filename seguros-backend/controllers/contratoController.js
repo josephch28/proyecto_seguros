@@ -1,4 +1,7 @@
 const pool = require('../config/database');
+const s3Service = require('../services/s3Service');
+const fileStorageService = require('../services/fileStorageService');
+const path = require('path');
 
 // Obtener todos los contratos
 const getContratos = async (req, res) => {
@@ -326,7 +329,7 @@ const actualizarEstadoContrato = async (req, res) => {
 
         if (estado === 'activo') {
             // Verificar que todos los documentos necesarios estén presentes
-            if (!contrato.historia_medica || !contrato.beneficiarios || !contrato.firma_cliente) {
+            if (!contrato.historia_medica_path || !contrato.beneficiarios || !contrato.firma_cliente) {
                 return res.status(400).json({
                     success: false,
                     message: 'No se puede aprobar el contrato. Faltan documentos requeridos.'
@@ -342,18 +345,19 @@ const actualizarEstadoContrato = async (req, res) => {
             `;
             updateValues = [estado, comentario || null, id];
         } else if (estado === 'pendiente') {
-            // Si se rechaza, limpiar los documentos y la firma
+            // Si se rechaza, limpiar los campos de documentos pero mantener los archivos físicos
             updateQuery = `
                 UPDATE contratos 
                 SET estado = ?,
                     comentario = ?,
-                    historia_medica = NULL,
+                    historia_medica_path = NULL,
                     beneficiarios = NULL,
                     firma_cliente = NULL,
                     updated_at = NOW()
                 WHERE id = ?
             `;
             updateValues = [estado, comentario || null, id];
+            console.log('Rechazando documentos y limpiando campos del contrato:', id);
         } else {
             return res.status(400).json({
                 success: false,
@@ -375,9 +379,8 @@ const actualizarEstadoContrato = async (req, res) => {
         }
 
         // Obtener el contrato actualizado
-        const [contratoActualizado] = await pool.query(`
-            SELECT 
-                c.*,
+        const [contratosActualizados] = await pool.query(`
+            SELECT c.*, 
                 CONCAT(u_cliente.nombre, ' ', u_cliente.apellido) as nombre_cliente,
                 CONCAT(u_agente.nombre, ' ', u_agente.apellido) as nombre_agente,
                 s.nombre as nombre_seguro,
@@ -390,26 +393,25 @@ const actualizarEstadoContrato = async (req, res) => {
             WHERE c.id = ?
         `, [id]);
 
-        // Parsear beneficiarios si existen
-        if (contratoActualizado[0].beneficiarios) {
-            try {
-                contratoActualizado[0].beneficiarios = JSON.parse(contratoActualizado[0].beneficiarios);
-            } catch (error) {
-                console.error('Error al parsear beneficiarios:', error);
-                contratoActualizado[0].beneficiarios = [];
-            }
-        }
+        const contratoActualizado = contratosActualizados[0];
+        console.log('Contrato actualizado:', {
+            id: contratoActualizado.id,
+            estado: contratoActualizado.estado,
+            tiene_historia_medica: !!contratoActualizado.historia_medica_path,
+            tiene_beneficiarios: !!contratoActualizado.beneficiarios,
+            tiene_firma: !!contratoActualizado.firma_cliente
+        });
 
         res.json({
             success: true,
-            message: estado === 'activo' ? 'Contrato aprobado correctamente' : 'Contrato rechazado correctamente',
-            data: contratoActualizado[0]
+            message: estado === 'activo' ? 'Contrato aprobado exitosamente' : 'Documentos rechazados. El cliente deberá volver a subirlos.',
+            data: contratoActualizado
         });
     } catch (error) {
-        console.error('Error al actualizar estado:', error);
+        console.error('Error al actualizar estado del contrato:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al actualizar el estado: ' + error.message
+            message: 'Error al actualizar el estado del contrato: ' + error.message
         });
     }
 };
@@ -658,23 +660,24 @@ const updateContratoDocumentos = async (req, res) => {
     try {
         const { id } = req.params;
         const { beneficiarios, firma_cliente } = req.body;
-        const historia_medica = req.file; // Archivo PDF subido
+        const { userRole, userId } = req.user;
 
         console.log('Datos recibidos:', {
             id,
-            historia_medica: historia_medica ? 'presente' : 'ausente',
-            beneficiarios: beneficiarios ? 'presente' : 'ausente',
-            firma_cliente: firma_cliente ? 'presente' : 'ausente'
+            beneficiarios,
+            firma_cliente,
+            file: req.file ? {
+                originalname: req.file.originalname,
+                size: req.file.size,
+                mimetype: req.file.mimetype
+            } : 'No file'
         });
 
-        // Verificar si el contrato existe y pertenece al cliente
-        const [contratos] = await pool.query(`
-            SELECT c.*, u.rol_id, r.nombre as rol_nombre
-            FROM contratos c
-            JOIN usuarios u ON c.cliente_id = u.id
-            JOIN roles r ON u.rol_id = r.id
-            WHERE c.id = ?
-        `, [id]);
+        // Obtener el contrato actual
+        const [contratos] = await pool.query(
+            'SELECT * FROM contratos WHERE id = ?',
+            [id]
+        );
 
         if (contratos.length === 0) {
             return res.status(404).json({
@@ -684,113 +687,114 @@ const updateContratoDocumentos = async (req, res) => {
         }
 
         const contrato = contratos[0];
-        const userRole = contrato.rol_nombre;
 
-        // Si es cliente, verificar que el contrato le pertenece
-        if (userRole === 'cliente' && contrato.cliente_id !== req.user.id) {
+        // Verificar permisos
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
             return res.status(403).json({
                 success: false,
-                message: 'No tienes permiso para modificar este contrato'
+                message: 'No tienes permiso para actualizar este contrato'
             });
         }
 
-        // Preparar los datos a actualizar
+        // Preparar actualizaciones
         const updates = [];
         const values = [];
 
-        if (historia_medica) {
+        // Si es cliente y está subiendo documentos, actualizar el estado a pendiente_revision
+        if (userRole === 'cliente') {
+            updates.push('estado = ?');
+            values.push('pendiente_revision');
+            console.log('Actualizando estado a pendiente_revision para cliente');
+        }
+
+        // Manejar historia médica
+        if (req.file) {
+            console.log('Iniciando subida de archivo:', {
+                originalName: req.file.originalname,
+                subfolder: `historia-medica/${id}`,
+                size: req.file.size
+            });
+
             try {
-                updates.push('historia_medica = ?');
-                values.push(historia_medica.buffer);
+                const filePath = await fileStorageService.saveFile(req.file, id);
+                updates.push('historia_medica_path = ?');
+                values.push(filePath);
+                console.log('Archivo guardado correctamente:', {
+                    path: filePath,
+                    size: req.file.size
+                });
             } catch (error) {
-                console.error('Error al procesar historia médica:', error);
-                return res.status(400).json({
+                console.error('Error al guardar archivo:', error);
+                return res.status(500).json({
                     success: false,
-                    message: 'Error al procesar el archivo PDF'
+                    message: 'Error al guardar el archivo'
                 });
             }
         }
 
+        // Manejar beneficiarios
         if (beneficiarios) {
-            try {
-                const beneficiariosArray = JSON.parse(beneficiarios);
-                if (Array.isArray(beneficiariosArray) && beneficiariosArray.length > 0) {
                     updates.push('beneficiarios = ?');
-                    values.push(beneficiarios);
+            values.push(JSON.stringify(beneficiarios));
                 }
-            } catch (error) {
-                console.error('Error al procesar beneficiarios:', error);
-                return res.status(400).json({
-                    success: false,
-                    message: 'Error al procesar los beneficiarios'
-                });
-            }
-        }
 
+        // Manejar firma del cliente
         if (firma_cliente) {
             updates.push('firma_cliente = ?');
             values.push(firma_cliente);
         }
 
-        // Si no hay campos para actualizar, devolver error
-        if (updates.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No se proporcionaron datos para actualizar'
-            });
-        }
-
-        // Agregar el ID al final de los valores
+        // Actualizar el contrato
+        if (updates.length > 0) {
+            const query = `UPDATE contratos SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`;
         values.push(id);
 
-        // Actualizar el contrato
-        const [result] = await pool.query(`
-            UPDATE contratos 
-            SET ${updates.join(', ')},
-                updated_at = NOW()
-            WHERE id = ?
-        `, values);
+            console.log('Ejecutando query:', query);
+            console.log('Valores:', values);
+
+            const [result] = await pool.query(query, values);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({
+                return res.status(400).json({
                 success: false,
                 message: 'Error al actualizar el contrato'
             });
         }
 
         // Obtener el contrato actualizado
-        const [contratoActualizado] = await pool.query(`
-            SELECT 
-                c.*,
-                CONCAT(u_cliente.nombre, ' ', u_cliente.apellido) as nombre_cliente,
-                CONCAT(u_agente.nombre, ' ', u_agente.apellido) as nombre_agente,
-                s.nombre as nombre_seguro,
-                ts.nombre as tipo_seguro
-            FROM contratos c
-            LEFT JOIN usuarios u_cliente ON c.cliente_id = u_cliente.id
-            LEFT JOIN usuarios u_agente ON c.agente_id = u_agente.id
-            LEFT JOIN seguros s ON c.seguro_id = s.id
-            LEFT JOIN tipos_seguro ts ON s.tipo_seguro_id = ts.id
-            WHERE c.id = ?
-        `, [id]);
+            const [contratosActualizados] = await pool.query(
+                'SELECT * FROM contratos WHERE id = ?',
+                [id]
+            );
 
-        // Parsear beneficiarios si existen
-        if (contratoActualizado[0].beneficiarios) {
-            try {
-                contratoActualizado[0].beneficiarios = JSON.parse(contratoActualizado[0].beneficiarios);
-            } catch (error) {
-                console.error('Error al parsear beneficiarios:', error);
-                contratoActualizado[0].beneficiarios = [];
-            }
-        }
+            const contratoActualizado = contratosActualizados[0];
+            console.log('Datos del contrato actualizado:', {
+                id: contratoActualizado.id,
+                estado: contratoActualizado.estado,
+                tiene_historia_medica: !!contratoActualizado.historia_medica_path,
+                historia_medica_path: contratoActualizado.historia_medica_path,
+                tiene_beneficiarios: !!contratoActualizado.beneficiarios,
+                tiene_firma: !!contratoActualizado.firma_cliente
+            });
 
         res.json({
             success: true,
             message: 'Documentos actualizados correctamente',
-            data: contratoActualizado[0]
+                data: {
+                    estado: contratoActualizado.estado,
+                    tiene_historia_medica: !!contratoActualizado.historia_medica_path,
+                    tiene_beneficiarios: !!contratoActualizado.beneficiarios,
+                    tiene_firma: !!contratoActualizado.firma_cliente
+                }
+            });
+        } else {
+            res.json({
+                success: true,
+                message: 'No hay cambios para actualizar'
         });
+        }
     } catch (error) {
-        console.error('Error al actualizar documentos:', error);
+        console.error('Error en updateContratoDocumentos:', error);
         res.status(500).json({
             success: false,
             message: 'Error al actualizar los documentos: ' + error.message
@@ -802,17 +806,26 @@ const updateContratoDocumentos = async (req, res) => {
 const obtenerHistoriaMedica = async (req, res) => {
     try {
         const { id } = req.params;
+        const { userRole, userId } = req;
 
-        // Verificar que el usuario tenga permiso
-        const [contratos] = await pool.query(`
-            SELECT c.*, u.rol_id, r.nombre as rol_nombre
+        console.log('Solicitud de historia médica:', {
+            contratoId: id,
+            userRole,
+            userId
+        });
+
+        // Obtener detalles del contrato con información del cliente
+        const [contratos] = await pool.query(
+            `SELECT c.*, r.nombre as cliente_rol 
             FROM contratos c
             JOIN usuarios u ON c.cliente_id = u.id
             JOIN roles r ON u.rol_id = r.id
-            WHERE c.id = ?
-        `, [id]);
+             WHERE c.id = ?`,
+            [id]
+        );
 
         if (contratos.length === 0) {
+            console.log('Contrato no encontrado');
             return res.status(404).json({
                 success: false,
                 message: 'Contrato no encontrado'
@@ -820,35 +833,61 @@ const obtenerHistoriaMedica = async (req, res) => {
         }
 
         const contrato = contratos[0];
-        const userRole = contrato.rol_nombre;
+        console.log('Detalles del contrato:', {
+            contratoId: contrato.id,
+            estado: contrato.estado,
+            historiaMedicaPath: contrato.historia_medica_path,
+            clienteId: contrato.cliente_id,
+            clienteRol: contrato.cliente_rol
+        });
 
         // Verificar permisos
-        if (userRole === 'cliente' && contrato.cliente_id !== req.user.id) {
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
+            console.log('Acceso denegado: cliente intentando acceder a otro contrato');
             return res.status(403).json({
                 success: false,
-                message: 'No tienes permiso para ver este documento'
+                message: 'No tienes permiso para acceder a esta historia médica'
             });
         }
 
-        if (!contrato.historia_medica) {
+        // Verificar si existe el archivo
+        if (!contrato.historia_medica_path) {
+            console.log('No hay historia médica subida');
             return res.status(404).json({
                 success: false,
                 message: 'No se ha subido la historia médica'
             });
         }
 
-        // Configurar los headers para la respuesta del PDF
+        try {
+            console.log('Intentando obtener archivo:', contrato.historia_medica_path);
+            const fileBuffer = await fileStorageService.getFile(contrato.historia_medica_path);
+            console.log('Archivo obtenido correctamente, tamaño:', fileBuffer.length);
+            
+            // Configurar headers para la respuesta
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename=historia_medica.pdf');
-        res.setHeader('Content-Length', contrato.historia_medica.length);
+            res.setHeader('Content-Disposition', `inline; filename="historia_medica_${id}.pdf"`);
+            res.setHeader('Content-Length', fileBuffer.length);
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
         
-        // Enviar el PDF
-        res.send(Buffer.from(contrato.historia_medica));
+            // Enviar el archivo
+            res.send(fileBuffer);
+            console.log('Archivo enviado correctamente');
     } catch (error) {
-        console.error('Error al obtener historia médica:', error);
+            console.error('Error al leer el archivo:', error);
+            return res.status(404).json({
+                success: false,
+                message: 'El archivo no está disponible'
+            });
+        }
+    } catch (error) {
+        console.error('Error en obtenerHistoriaMedica:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al obtener la historia médica: ' + error.message
+            message: 'Error al obtener la historia médica'
         });
     }
 };
@@ -911,102 +950,124 @@ const getContratoDetalles = async (req, res) => {
 // Obtener contrato por ID
 const getContratoById = async (req, res) => {
     try {
-        const { id } = req.params;
-        console.log('Buscando contrato con ID:', id);
+        const { id: contratoId } = req.params;
+        const { userRole, userId } = req;
 
-        // Obtener el rol del usuario
-        const [roles] = await pool.query(`
-            SELECT r.nombre 
-            FROM roles r
-            JOIN usuarios u ON u.rol_id = r.id
-            WHERE u.id = ?
-        `, [req.user.id]);
+        console.log('\n=== GET CONTRATO BY ID ===');
+        console.log('Parámetros recibidos:', { contratoId, userRole, userId });
 
-        const userRole = roles[0]?.nombre;
-        console.log('Rol del usuario:', userRole);
+        // Obtener detalles del contrato
+        const [contratos] = await pool.query(
+            `SELECT c.*, u.rol as cliente_rol 
+             FROM contratos c 
+             JOIN usuarios u ON c.cliente_id = u.id 
+             WHERE c.id = ?`,
+            [contratoId]
+        );
 
-        let query = `
-            SELECT 
-                c.*,
-                CONCAT(u_cliente.nombre, ' ', u_cliente.apellido) as nombre_cliente,
-                CONCAT(u_agente.nombre, ' ', u_agente.apellido) as nombre_agente,
-                s.nombre as nombre_seguro,
-                ts.nombre as tipo_seguro,
-                u_cliente.correo as correo_cliente,
-                u_cliente.telefono as telefono_cliente,
-                u_agente.correo as correo_agente,
-                u_agente.telefono as telefono_agente,
-                c.historia_medica,
-                c.beneficiarios,
-                c.firma_cliente,
-                c.firma_agente,
-                c.estado,
-                c.created_at,
-                c.updated_at
-            FROM contratos c
-            LEFT JOIN usuarios u_cliente ON c.cliente_id = u_cliente.id
-            LEFT JOIN usuarios u_agente ON c.agente_id = u_agente.id
-            LEFT JOIN seguros s ON c.seguro_id = s.id
-            LEFT JOIN tipos_seguro ts ON s.tipo_seguro_id = ts.id
-            WHERE c.id = ?
-        `;
-
-        // Si es cliente, solo puede ver sus propios contratos
-        if (userRole === 'cliente') {
-            const [contrato] = await pool.query(query + ' AND c.cliente_id = ?', [id, req.user.id]);
-            
-            if (contrato.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Contrato no encontrado o no tienes permiso para verlo'
-                });
-            }
-
-            // Parsear beneficiarios si existen
-            if (contrato[0].beneficiarios) {
-                try {
-                    contrato[0].beneficiarios = JSON.parse(contrato[0].beneficiarios);
-                } catch (error) {
-                    console.error('Error al parsear beneficiarios:', error);
-                    contrato[0].beneficiarios = [];
-                }
-            }
-
-            res.json({
-                success: true,
-                data: contrato[0]
-            });
-        } else {
-            // Agentes y administradores pueden ver cualquier contrato
-            const [contrato] = await pool.query(query, [id]);
-            
-            if (contrato.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Contrato no encontrado'
-                });
-            }
-
-            // Parsear beneficiarios si existen
-            if (contrato[0].beneficiarios) {
-                try {
-                    contrato[0].beneficiarios = JSON.parse(contrato[0].beneficiarios);
-                } catch (error) {
-                    console.error('Error al parsear beneficiarios:', error);
-                    contrato[0].beneficiarios = [];
-                }
-            }
-
-            res.json({
-                success: true,
-                data: contrato[0]
+        if (contratos.length === 0) {
+            console.log('Contrato no encontrado');
+            return res.status(404).json({
+                success: false,
+                message: 'Contrato no encontrado'
             });
         }
+
+        const contrato = contratos[0];
+        console.log('Contrato encontrado:', {
+            id: contrato.id,
+            estado: contrato.estado,
+            cliente_id: contrato.cliente_id,
+            cliente_rol: contrato.cliente_rol,
+            historia_medica_path: contrato.historia_medica_path,
+            tiene_beneficiarios: !!contrato.beneficiarios
+        });
+
+        // Verificar permisos
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
+            console.log('Acceso denegado: cliente intentando acceder a contrato de otro cliente');
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para ver este contrato'
+            });
+        }
+
+        // Verificar si existe el archivo de historia médica
+        let tieneHistoriaMedica = false;
+        if (contrato.historia_medica_path) {
+            console.log('Verificando existencia de historia médica:', contrato.historia_medica_path);
+            try {
+                // Asegurarse de que la ruta sea relativa al directorio de uploads
+                const relativePath = contrato.historia_medica_path.replace(/^\/+/, '');
+                console.log('Ruta relativa normalizada:', relativePath);
+
+                const fileExists = await fileStorageService.fileExists(relativePath);
+                console.log('¿Existe el archivo?', fileExists);
+                tieneHistoriaMedica = fileExists;
+
+                if (!fileExists) {
+                    console.log('Archivo no encontrado, actualizando base de datos');
+                    await pool.query(
+                        'UPDATE contratos SET historia_medica_path = NULL WHERE id = ?',
+                        [contratoId]
+                    );
+                    contrato.historia_medica_path = null;
+                } else {
+                    // Si el archivo existe, mantener la ruta relativa
+                    contrato.historia_medica_path = relativePath;
+                }
+            } catch (error) {
+                console.error('Error al verificar archivo:', error);
+                tieneHistoriaMedica = false;
+            }
+        } else {
+            console.log('No hay ruta de historia médica en la base de datos');
+        }
+
+        // Procesar beneficiarios
+        let beneficiarios = [];
+        if (contrato.beneficiarios) {
+            try {
+                // Primero intentamos parsear el JSON directamente
+                beneficiarios = JSON.parse(contrato.beneficiarios);
+                console.log('Beneficiarios parseados directamente:', beneficiarios);
+            } catch (error) {
+                try {
+                    // Si falla, intentamos parsear el string escapado
+                    const unescapedJson = contrato.beneficiarios.replace(/\\"/g, '"');
+                    beneficiarios = JSON.parse(unescapedJson);
+                    console.log('Beneficiarios parseados después de unescape:', beneficiarios);
+                } catch (secondError) {
+                    console.error('Error al parsear beneficiarios:', secondError);
+                    beneficiarios = [];
+                }
+            }
+        }
+
+        const response = {
+            ...contrato,
+            tiene_historia_medica: tieneHistoriaMedica,
+            beneficiarios: beneficiarios
+        };
+
+        console.log('Enviando respuesta:', {
+            id: response.id,
+            estado: response.estado,
+            tiene_historia_medica: response.tiene_historia_medica,
+            tiene_beneficiarios: beneficiarios.length > 0,
+            beneficiarios: beneficiarios
+        });
+
+        res.json({
+            success: true,
+            data: response
+        });
     } catch (error) {
-        console.error('Error al obtener contrato:', error);
+        console.error('Error en getContratoById:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al obtener el contrato: ' + error.message
+            message: 'Error al obtener el contrato',
+            error: error.message
         });
     }
 };
@@ -1068,6 +1129,79 @@ const deleteContrato = async (req, res) => {
     }
 };
 
+const getHistoriaMedica = async (req, res) => {
+    try {
+        const { id: contratoId } = req.params;
+        const { userRole, userId } = req;
+
+        console.log('\n=== GET HISTORIA MÉDICA ===');
+        console.log('Parámetros recibidos:', { contratoId, userRole, userId });
+
+        // Obtener el contrato
+        const [contratos] = await pool.query(
+            'SELECT * FROM contratos WHERE id = ?',
+            [contratoId]
+        );
+
+        if (contratos.length === 0) {
+            console.log('Contrato no encontrado');
+            return res.status(404).json({
+                success: false,
+                message: 'Contrato no encontrado'
+            });
+        }
+
+        const contrato = contratos[0];
+        console.log('Contrato encontrado:', {
+            id: contrato.id,
+            historia_medica_path: contrato.historia_medica_path
+        });
+
+        // Verificar permisos
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
+            console.log('Acceso denegado: cliente intentando acceder a contrato de otro cliente');
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para ver este contrato'
+            });
+        }
+
+        if (!contrato.historia_medica_path) {
+            console.log('No hay historia médica asociada');
+            return res.status(404).json({
+                success: false,
+                message: 'No hay historia médica asociada a este contrato'
+            });
+        }
+
+        // Verificar si el archivo existe
+        const fileExists = await fileStorageService.fileExists(contrato.historia_medica_path);
+        if (!fileExists) {
+            console.log('Archivo no encontrado en el sistema de archivos');
+            return res.status(404).json({
+                success: false,
+                message: 'El archivo de historia médica no se encuentra disponible'
+            });
+        }
+
+        // Obtener el archivo
+        const file = await fileStorageService.getFile(contrato.historia_medica_path);
+        console.log('Archivo obtenido exitosamente');
+
+        // Enviar el archivo
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=${contrato.historia_medica_path.split('/').pop()}`);
+        res.send(file);
+    } catch (error) {
+        console.error('Error en getHistoriaMedica:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener la historia médica',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getContratos,
     getContratosByCliente,
@@ -1082,5 +1216,6 @@ module.exports = {
     updateContrato,
     getContratoById,
     obtenerHistoriaMedica,
-    deleteContrato
+    deleteContrato,
+    getHistoriaMedica
 }; 

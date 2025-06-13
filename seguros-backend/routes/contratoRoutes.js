@@ -54,4 +54,8 @@ router.get('/:id', verifyToken, verifyClienteOrAgentOrAdmin, getContratoById);
 router.get('/:id/detalles', verifyToken, verifyClienteOrAgentOrAdmin, getContratoDetalles);
 router.delete('/:id', verifyToken, deleteContrato);
 
+// Rutas para documentos
+router.get('/:id/documentos/historia-medica', verifyToken, obtenerHistoriaMedica);
+router.put('/:id/documentos', verifyToken, updateContratoDocumentos);
+
 module.exports = router; 

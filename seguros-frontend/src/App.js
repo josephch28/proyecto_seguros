@@ -20,7 +20,6 @@ import ChangePassword from './components/ChangePassword';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ReimbursementManagement from './components/ReimbursementManagement';
-import PrivateRoute from './components/PrivateRoute';
 
 // Tema personalizado
 const theme = createTheme({
