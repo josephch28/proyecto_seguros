@@ -959,7 +959,7 @@ const getContratoById = async (req, res) => {
         // Obtener detalles del contrato
         const [contratos] = await pool.query(
             `SELECT c.*, u.rol as cliente_rol 
-             FROM contratos c 
+            FROM contratos c
              JOIN usuarios u ON c.cliente_id = u.id 
              WHERE c.id = ?`,
             [contratoId]
@@ -967,11 +967,11 @@ const getContratoById = async (req, res) => {
 
         if (contratos.length === 0) {
             console.log('Contrato no encontrado');
-            return res.status(404).json({
-                success: false,
+                return res.status(404).json({
+                    success: false,
                 message: 'Contrato no encontrado'
-            });
-        }
+                });
+            }
 
         const contrato = contratos[0];
         console.log('Contrato encontrado:', {
@@ -987,10 +987,10 @@ const getContratoById = async (req, res) => {
         if (userRole === 'cliente' && contrato.cliente_id !== userId) {
             console.log('Acceso denegado: cliente intentando acceder a contrato de otro cliente');
             return res.status(403).json({
-                success: false,
+                    success: false,
                 message: 'No tienes permiso para ver este contrato'
-            });
-        }
+                });
+            }
 
         // Verificar si existe el archivo de historia médica
         let tieneHistoriaMedica = false;
@@ -1016,7 +1016,7 @@ const getContratoById = async (req, res) => {
                     // Si el archivo existe, mantener la ruta relativa
                     contrato.historia_medica_path = relativePath;
                 }
-            } catch (error) {
+                } catch (error) {
                 console.error('Error al verificar archivo:', error);
                 tieneHistoriaMedica = false;
             }
@@ -1058,10 +1058,10 @@ const getContratoById = async (req, res) => {
             beneficiarios: beneficiarios
         });
 
-        res.json({
-            success: true,
+            res.json({
+                success: true,
             data: response
-        });
+            });
     } catch (error) {
         console.error('Error en getContratoById:', error);
         res.status(500).json({

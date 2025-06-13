@@ -33,9 +33,10 @@ import {
   ListItemSecondaryAction,
   Container,
   CircularProgress,
-  Chip
+  Chip,
+  ListItemIcon
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Upload as UploadIcon, Download as DownloadIcon, Restore as RestoreIcon, Check as CheckIcon, Close as CloseIcon, Add as AddIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Upload as UploadIcon, Download as DownloadIcon, Restore as RestoreIcon, Check as CheckIcon, Close as CloseIcon, Add as AddIcon, Visibility as VisibilityIcon, CheckCircle as CheckCircleIcon, Info as InfoIcon } from '@mui/icons-material';
 import axios from 'axios';
 import SignaturePad from 'react-signature-canvas';
 import { useNavigate } from 'react-router-dom';
@@ -72,6 +73,7 @@ const ContractManagement = () => {
   });
   const [signature, setSignature] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [selectedInsuranceDetails, setSelectedInsuranceDetails] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -648,6 +650,30 @@ const ContractManagement = () => {
     );
   };
 
+  const handleInsuranceChange = async (e) => {
+    const seguroId = e.target.value;
+    setFormData(prev => ({ ...prev, seguro_id: seguroId }));
+    
+    if (seguroId) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(
+          `${API_URL}/seguros/${seguroId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+        if (response.data.success) {
+          setSelectedInsuranceDetails(response.data.data);
+        }
+      } catch (error) {
+        console.error('Error al cargar detalles del seguro:', error);
+      }
+    } else {
+      setSelectedInsuranceDetails(null);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom>
@@ -761,7 +787,7 @@ const ContractManagement = () => {
           }
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
             {userRole === 'agente' ? (
               <>
                 <Grid item xs={12} md={6}>
@@ -788,7 +814,7 @@ const ContractManagement = () => {
                     <Select
                       name="seguro_id"
                       value={formData.seguro_id}
-                      onChange={handleInputChange}
+                      onChange={handleInsuranceChange}
                       required
                       disabled={!!selectedContract}
                     >
@@ -1037,6 +1063,62 @@ const ContractManagement = () => {
                       </Box>
                     </Grid>
                   </>
+                )}
+
+                {/* Detalles del Seguro */}
+                {selectedInsuranceDetails && (
+                  <Grid item xs={12}>
+                    <Paper sx={{ p: 2, mt: 2 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Detalles del Seguro
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1">
+                            <strong>Tipo:</strong> {selectedInsuranceDetails.tipo === 'medico' ? 'Médico' : 'Vida'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1">
+                            <strong>Cobertura:</strong>{' '}
+                            {selectedInsuranceDetails.tipo === 'medico' 
+                              ? `${selectedInsuranceDetails.cobertura}% de gastos médicos`
+                              : `$${selectedInsuranceDetails.cobertura} en caso de fallecimiento`}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1">
+                            <strong>Beneficios:</strong>
+                          </Typography>
+                          <List>
+                            {selectedInsuranceDetails.beneficios.split(',').map((beneficio, index) => (
+                              <ListItem key={index}>
+                                <ListItemIcon>
+                                  <CheckCircleIcon color="success" />
+                                </ListItemIcon>
+                                <ListItemText primary={beneficio.trim()} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1">
+                            <strong>Requisitos:</strong>
+                          </Typography>
+                          <List>
+                            {selectedInsuranceDetails.requisitos.split(',').map((requisito, index) => (
+                              <ListItem key={index}>
+                                <ListItemIcon>
+                                  <InfoIcon color="info" />
+                                </ListItemIcon>
+                                <ListItemText primary={requisito.trim()} />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Grid>
                 )}
               </>
             ) : (

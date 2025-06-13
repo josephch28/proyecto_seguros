@@ -23,9 +23,11 @@ import {
   Select,
   MenuItem,
   Grid,
-  CircularProgress
+  CircularProgress,
+  Container,
+  Chip
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import axios from 'axios';
 
 // Configurar axios
@@ -41,14 +43,16 @@ const InsuranceManagement = () => {
   const [loading, setLoading] = useState(false);
   const [loadingTypes, setLoadingTypes] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [formData, setFormData] = useState({
     nombre: '',
-    tipo_seguro_id: '',
     descripcion: '',
+    tipo: '',
     cobertura: '',
     beneficios: '',
+    requisitos: '',
     precio_base: '',
+    duracion_meses: '',
     estado: 'activo'
   });
 
@@ -85,22 +89,26 @@ const InsuranceManagement = () => {
     setSelectedInsurance(insurance);
       setFormData({
         nombre: insurance.nombre,
-        tipo_seguro_id: insurance.tipo_seguro_id,
+        tipo: insurance.tipo,
         descripcion: insurance.descripcion,
         cobertura: insurance.cobertura,
         beneficios: insurance.beneficios,
+        requisitos: insurance.requisitos,
         precio_base: insurance.precio_base,
+        duracion_meses: insurance.duracion_meses,
         estado: insurance.estado
       });
     } else {
       setSelectedInsurance(null);
       setFormData({
         nombre: '',
-        tipo_seguro_id: '',
+        tipo: '',
         descripcion: '',
         cobertura: '',
         beneficios: '',
+        requisitos: '',
         precio_base: '',
+        duracion_meses: '',
         estado: 'activo'
       });
     }
@@ -112,11 +120,13 @@ const InsuranceManagement = () => {
     setSelectedInsurance(null);
     setFormData({
       nombre: '',
-      tipo_seguro_id: '',
+      tipo: '',
       descripcion: '',
       cobertura: '',
       beneficios: '',
+      requisitos: '',
       precio_base: '',
+      duracion_meses: '',
       estado: 'activo'
     });
   };
@@ -155,10 +165,10 @@ const InsuranceManagement = () => {
 
       if (selectedInsurance) {
         await axios.put(`/api/seguros/${selectedInsurance.id}`, formData, config);
-        setSuccess('Seguro actualizado exitosamente');
+        setSuccessMessage('Seguro actualizado exitosamente');
       } else {
         await axios.post('/api/seguros', formData, config);
-        setSuccess('Seguro creado exitosamente');
+        setSuccessMessage('Seguro creado exitosamente');
       }
       handleCloseDialog();
       fetchInsurances();
@@ -189,7 +199,7 @@ const InsuranceManagement = () => {
         };
 
         await axios.delete(`/api/seguros/${id}`, config);
-        setSuccess('Seguro eliminado exitosamente');
+        setSuccessMessage('Seguro eliminado exitosamente');
         fetchInsurances();
       } catch (error) {
         if (error.response?.status === 401) {
@@ -202,27 +212,32 @@ const InsuranceManagement = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4">Gestión de Seguros</Typography>
+    <Container>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">
+          Gestión de Seguros
+        </Typography>
         <Button
           variant="contained"
           color="primary"
+          startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
         >
           Nuevo Seguro
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
+      {/* Tabla de Seguros */}
+      <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>Nombre</TableCell>
               <TableCell>Tipo</TableCell>
-              <TableCell>Descripción</TableCell>
               <TableCell>Cobertura</TableCell>
               <TableCell>Precio Base</TableCell>
+                <TableCell>Duración</TableCell>
               <TableCell>Estado</TableCell>
               <TableCell>Acciones</TableCell>
             </TableRow>
@@ -231,18 +246,33 @@ const InsuranceManagement = () => {
             {insurances.map((insurance) => (
               <TableRow key={insurance.id}>
                 <TableCell>{insurance.nombre}</TableCell>
+                  <TableCell>{insurance.tipo === 'medico' ? 'Médico' : 'Vida'}</TableCell>
                 <TableCell>
-                  {types.find(t => t.id === insurance.tipo_seguro_id)?.nombre || 'N/A'}
+                    {insurance.tipo === 'medico' 
+                      ? `${insurance.cobertura}%` 
+                      : `$${insurance.cobertura}`}
                 </TableCell>
-                <TableCell>{insurance.descripcion}</TableCell>
-                <TableCell>{insurance.cobertura}</TableCell>
                 <TableCell>${insurance.precio_base}</TableCell>
-                <TableCell>{insurance.estado}</TableCell>
+                  <TableCell>{insurance.duracion_meses} meses</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={insurance.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                      color={insurance.estado === 'activo' ? 'success' : 'error'}
+                    />
+                  </TableCell>
                 <TableCell>
-                  <IconButton onClick={() => handleOpenDialog(insurance)}>
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleOpenDialog(insurance)}
+                      size="small"
+                    >
                     <EditIcon />
                   </IconButton>
-                  <IconButton onClick={() => handleDelete(insurance.id)}>
+                    <IconButton
+                      color="error"
+                      onClick={() => handleDelete(insurance.id)}
+                      size="small"
+                    >
                     <DeleteIcon />
                   </IconButton>
                 </TableCell>
@@ -251,151 +281,181 @@ const InsuranceManagement = () => {
           </TableBody>
         </Table>
       </TableContainer>
+      </Paper>
 
+      {/* Diálogo de Formulario */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
             <DialogTitle>
           {selectedInsurance ? 'Editar Seguro' : 'Nuevo Seguro'}
             </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
+                label="Nombre"
                 name="nombre"
-                label="Nombre del Seguro"
                 value={formData.nombre}
                 onChange={handleInputChange}
                 required
               />
             </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Tipo de Seguro</InputLabel>
-                <Select
-                  name="tipo_seguro_id"
-                  value={formData.tipo_seguro_id}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Tipo"
+                name="tipo"
+                select
+                value={formData.tipo}
                   onChange={handleInputChange}
-                  label="Tipo de Seguro"
                   required
-                  disabled={loadingTypes}
-                >
-                  {loadingTypes ? (
-                    <MenuItem disabled>
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
-                      Cargando tipos...
-                    </MenuItem>
-                  ) : types.length === 0 ? (
-                    <MenuItem disabled>No hay tipos disponibles</MenuItem>
-                  ) : (
-                    types.map((type) => (
-                      <MenuItem key={type.id} value={type.id}>
-                        {type.nombre}
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-              </FormControl>
+              >
+                <MenuItem value="medico">Médico</MenuItem>
+                <MenuItem value="vida">Vida</MenuItem>
+              </TextField>
             </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                multiline
-                rows={3}
-                name="descripcion"
                 label="Descripción"
+                name="descripcion"
                 value={formData.descripcion}
                 onChange={handleInputChange}
+                multiline
+                rows={3}
                 required
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                multiline
-                rows={3}
+                label={formData.tipo === 'medico' ? 'Porcentaje de Cobertura (%)' : 'Monto de Cobertura ($)'}
                 name="cobertura"
-                label="Cobertura"
+                type="number"
                 value={formData.cobertura}
                 onChange={handleInputChange}
                 required
+                InputProps={{
+                  inputProps: { 
+                    min: 0,
+                    max: formData.tipo === 'medico' ? 100 : undefined,
+                    step: formData.tipo === 'medico' ? 1 : 0.01
+                  }
+                }}
+                helperText={formData.tipo === 'medico' ? 'Ingrese el porcentaje de gastos médicos que se cubrirá' : 'Ingrese el monto que se pagará en caso de fallecimiento'}
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                multiline
-                rows={3}
-                name="beneficios"
-                label="Beneficios"
-                value={formData.beneficios}
-                onChange={handleInputChange}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                name="precio_base"
                 label="Precio Base"
+                name="precio_base"
+                type="number"
                 value={formData.precio_base}
                 onChange={handleInputChange}
                 required
-                inputProps={{ min: 0 }}
-                error={formData.precio_base < 0}
-                helperText={formData.precio_base < 0 ? "El precio no puede ser negativo" : ""}
+                InputProps={{
+                  inputProps: { 
+                    min: 0,
+                    step: 0.01
+                  }
+                }}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
-                <Select
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Duración (meses)"
+                name="duracion_meses"
+                type="number"
+                value={formData.duracion_meses}
+                onChange={handleInputChange}
+                required
+                InputProps={{
+                  inputProps: { 
+                    min: 1,
+                    step: 1
+                  }
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Estado"
                   name="estado"
+                select
                   value={formData.estado}
                   onChange={handleInputChange}
-                  label="Estado"
                   required
                 >
                   <MenuItem value="activo">Activo</MenuItem>
                   <MenuItem value="inactivo">Inactivo</MenuItem>
-                </Select>
-              </FormControl>
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Beneficios"
+                name="beneficios"
+                value={formData.beneficios}
+                onChange={handleInputChange}
+                multiline
+                rows={3}
+                required
+                helperText="Ingrese los beneficios del seguro, separados por comas"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Requisitos"
+                name="requisitos"
+                value={formData.requisitos}
+                onChange={handleInputChange}
+                multiline
+                rows={3}
+                required
+                helperText="Ingrese los requisitos del seguro, separados por comas"
+              />
             </Grid>
           </Grid>
             </DialogContent>
             <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
+          <Button onClick={handleCloseDialog} disabled={loading}>
+            Cancelar
+          </Button>
           <Button
             onClick={handleSubmit}
             variant="contained"
             color="primary"
-            disabled={loading || loadingTypes}
+            disabled={loading}
           >
-            {loading ? 'Procesando...' : selectedInsurance ? 'Actualizar' : 'Crear'}
+            {loading ? 'Guardando...' : selectedInsurance ? 'Actualizar' : 'Crear'}
           </Button>
             </DialogActions>
       </Dialog>
 
       <Snackbar
-        open={!!error}
+        open={!!error || !!successMessage}
         autoHideDuration={6000}
-        onClose={() => setError('')}
+        onClose={() => {
+          setError('');
+          setSuccessMessage('');
+        }}
       >
-        <Alert severity="error" onClose={() => setError('')}>
-          {error}
+        <Alert
+          onClose={() => {
+            setError('');
+            setSuccessMessage('');
+          }}
+          severity={error ? 'error' : 'success'}
+          sx={{ width: '100%' }}
+        >
+          {error || successMessage}
         </Alert>
       </Snackbar>
-
-      <Snackbar
-        open={!!success}
-        autoHideDuration={6000}
-        onClose={() => setSuccess('')}
-      >
-        <Alert severity="success" onClose={() => setSuccess('')}>
-          {success}
-        </Alert>
-      </Snackbar>
-    </Box>
+    </Container>
   );
 };
 
