@@ -1054,6 +1054,14 @@ const ContractManagement = () => {
                       <Box sx={{ display: 'flex', gap: 2 }}>
                         <Button
                           variant="contained"
+                          color="success"
+                          onClick={() => handleApproveReject(selectedContract.id, 'aprobado')}
+                          startIcon={<CheckIcon />}
+                        >
+                          Aprobar Contrato
+                        </Button>
+                        <Button
+                          variant="contained"
                           color="error"
                           onClick={() => handleApproveReject(selectedContract.id, 'rechazado')}
                           startIcon={<CloseIcon />}

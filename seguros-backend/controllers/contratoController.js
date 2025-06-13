@@ -277,9 +277,9 @@ const createContrato = async (req, res) => {
 const actualizarEstadoContrato = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado, comentario } = req.body;
+        const { estado } = req.body;
 
-        console.log('Actualizando estado del contrato:', { id, estado, comentario });
+        console.log('Actualizando estado del contrato:', { id, estado });
 
         if (!estado) {
             return res.status(400).json({
@@ -323,53 +323,14 @@ const actualizarEstadoContrato = async (req, res) => {
 
         const contrato = contratos[0];
 
-        // Preparar la actualización según el estado
-        let updateQuery = '';
-        let updateValues = [];
-
-        if (estado === 'activo') {
-            // Verificar que todos los documentos necesarios estén presentes
-            if (!contrato.historia_medica_path || !contrato.beneficiarios || !contrato.firma_cliente) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'No se puede aprobar el contrato. Faltan documentos requeridos.'
-                });
-            }
-
-            updateQuery = `
-                UPDATE contratos 
-                SET estado = ?,
-                    comentario = ?,
-                    updated_at = NOW()
-                WHERE id = ?
-            `;
-            updateValues = [estado, comentario || null, id];
-        } else if (estado === 'pendiente') {
-            // Si se rechaza, limpiar los campos de documentos pero mantener los archivos físicos
-            updateQuery = `
-                UPDATE contratos 
-                SET estado = ?,
-                    comentario = ?,
-                    historia_medica_path = NULL,
-                    beneficiarios = NULL,
-                    firma_cliente = NULL,
-                    updated_at = NOW()
-                WHERE id = ?
-            `;
-            updateValues = [estado, comentario || null, id];
-            console.log('Rechazando documentos y limpiando campos del contrato:', id);
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: 'Estado no válido. Use "activo" para aprobar o "pendiente" para rechazar.'
-            });
-        }
-
-        console.log('Ejecutando query:', updateQuery);
-        console.log('Valores:', updateValues);
-
-        // Ejecutar la actualización
-        const [result] = await pool.query(updateQuery, updateValues);
+        // Solo actualizar el estado
+        const [result] = await pool.query(
+            `UPDATE contratos 
+            SET estado = ?,
+                updated_at = NOW()
+            WHERE id = ?`,
+            [estado, id]
+        );
 
         if (result.affectedRows === 0) {
             return res.status(404).json({
@@ -394,17 +355,10 @@ const actualizarEstadoContrato = async (req, res) => {
         `, [id]);
 
         const contratoActualizado = contratosActualizados[0];
-        console.log('Contrato actualizado:', {
-            id: contratoActualizado.id,
-            estado: contratoActualizado.estado,
-            tiene_historia_medica: !!contratoActualizado.historia_medica_path,
-            tiene_beneficiarios: !!contratoActualizado.beneficiarios,
-            tiene_firma: !!contratoActualizado.firma_cliente
-        });
 
         res.json({
             success: true,
-            message: estado === 'activo' ? 'Contrato aprobado exitosamente' : 'Documentos rechazados. El cliente deberá volver a subirlos.',
+            message: estado === 'activo' ? 'Contrato aprobado exitosamente' : 'Contrato rechazado',
             data: contratoActualizado
         });
     } catch (error) {
@@ -566,6 +520,10 @@ const updateContrato = async (req, res) => {
             }
         } else {
             // Agentes y administradores pueden actualizar todos los campos
+            // Mantener la firma existente si no se proporciona una nueva
+            const [currentContrato] = await pool.query('SELECT firma_cliente FROM contratos WHERE id = ?', [id]);
+            const firmaActual = currentContrato[0]?.firma_cliente;
+
             const [result] = await pool.query(`
                 UPDATE contratos 
                 SET 
@@ -602,7 +560,7 @@ const updateContrato = async (req, res) => {
                 estado,
                 historia_medica || null,
                 beneficiarios ? JSON.stringify(beneficiarios) : null,
-                firma_cliente || null,
+                firma_cliente || firmaActual, // Usar la firma existente si no hay una nueva
                 firma_agente || null,
                 id
             ]);
@@ -616,9 +574,8 @@ const updateContrato = async (req, res) => {
         }
 
         // Obtener el contrato actualizado
-        const [contratoActualizado] = await pool.query(`
-            SELECT 
-                c.*,
+        const [contratosActualizados] = await pool.query(`
+            SELECT c.*, 
                 CONCAT(u_cliente.nombre, ' ', u_cliente.apellido) as nombre_cliente,
                 CONCAT(u_agente.nombre, ' ', u_agente.apellido) as nombre_agente,
                 s.nombre as nombre_seguro,
@@ -631,20 +588,10 @@ const updateContrato = async (req, res) => {
             WHERE c.id = ?
         `, [id]);
 
-        // Parsear beneficiarios si existen
-        if (contratoActualizado[0].beneficiarios) {
-            try {
-                contratoActualizado[0].beneficiarios = JSON.parse(contratoActualizado[0].beneficiarios);
-            } catch (error) {
-                console.error('Error al parsear beneficiarios:', error);
-                contratoActualizado[0].beneficiarios = [];
-            }
-        }
-
         res.json({
             success: true,
             message: 'Contrato actualizado exitosamente',
-            data: contratoActualizado[0]
+            data: contratosActualizados[0]
         });
     } catch (error) {
         console.error('Error al actualizar contrato:', error);
