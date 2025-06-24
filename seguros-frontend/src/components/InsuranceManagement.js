@@ -46,13 +46,13 @@ const InsuranceManagement = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [formData, setFormData] = useState({
     nombre: '',
+    tipo_seguro_id: '',
     descripcion: '',
-    tipo: '',
-    cobertura: '',
+    porcentaje_cobertura: '',
+    monto_cobertura: '',
     beneficios: '',
     requisitos: '',
     precio_base: '',
-    duracion_meses: '',
     estado: 'activo'
   });
 
@@ -86,29 +86,36 @@ const InsuranceManagement = () => {
 
   const handleOpenDialog = (insurance = null) => {
     if (insurance) {
-    setSelectedInsurance(insurance);
+      console.log('Abriendo diálogo para editar seguro:', insurance);
+      setSelectedInsurance(insurance);
+      
+      // Convertir los datos del backend al formato del formulario
+      const tipoSeguroId = insurance.tipo_seguro_id;
+      const montoCobertura = insurance.tipo_seguro_id === 1 ? insurance.porcentaje_cobertura : '';
+      const porcentajeCobertura = insurance.tipo_seguro_id === 2 ? insurance.porcentaje_cobertura : '';
+
       setFormData({
-        nombre: insurance.nombre,
-        tipo: insurance.tipo,
-        descripcion: insurance.descripcion,
-        cobertura: insurance.cobertura,
-        beneficios: insurance.beneficios,
-        requisitos: insurance.requisitos,
-        precio_base: insurance.precio_base,
-        duracion_meses: insurance.duracion_meses,
-        estado: insurance.estado
+        nombre: insurance.nombre || '',
+        tipo_seguro_id: tipoSeguroId,
+        descripcion: insurance.descripcion || '',
+        porcentaje_cobertura: porcentajeCobertura,
+        monto_cobertura: montoCobertura,
+        beneficios: insurance.beneficios || '',
+        requisitos: insurance.requisitos || '',
+        precio_base: insurance.precio_base || '',
+        estado: insurance.estado || 'activo'
       });
     } else {
       setSelectedInsurance(null);
       setFormData({
         nombre: '',
-        tipo: '',
+        tipo_seguro_id: '',
         descripcion: '',
-        cobertura: '',
+        porcentaje_cobertura: '',
+        monto_cobertura: '',
         beneficios: '',
         requisitos: '',
         precio_base: '',
-        duracion_meses: '',
         estado: 'activo'
       });
     }
@@ -120,13 +127,13 @@ const InsuranceManagement = () => {
     setSelectedInsurance(null);
     setFormData({
       nombre: '',
-      tipo: '',
+      tipo_seguro_id: '',
       descripcion: '',
-      cobertura: '',
+      porcentaje_cobertura: '',
+      monto_cobertura: '',
       beneficios: '',
       requisitos: '',
       precio_base: '',
-      duracion_meses: '',
       estado: 'activo'
     });
   };
@@ -134,6 +141,17 @@ const InsuranceManagement = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
+    // Si se cambia el tipo de seguro, limpiar los campos de cobertura
+    if (name === 'tipo_seguro_id') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        porcentaje_cobertura: '',
+        monto_cobertura: ''
+      }));
+      return;
+    }
+
     // Validar que el precio base no sea negativo
     if (name === 'precio_base' && value < 0) {
       return;
@@ -145,9 +163,7 @@ const InsuranceManagement = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSubmit = async () => {
     try {
       // Obtener el token del localStorage
       const token = localStorage.getItem('token');
@@ -156,30 +172,92 @@ const InsuranceManagement = () => {
         return;
       }
 
-      // Configurar el token en el header
+      // Validar campos requeridos
+      if (!formData.nombre || !formData.tipo_seguro_id || !formData.descripcion || 
+          !formData.beneficios || !formData.requisitos || !formData.precio_base) {
+        setError('Todos los campos son requeridos');
+        return;
+      }
+
+      // Determinar el tipo y cobertura basado en tipo_seguro_id
+      const tipo = formData.tipo_seguro_id === 1 ? 'vida' : 'medico';
+      const cobertura = tipo === 'vida' ? formData.monto_cobertura : formData.porcentaje_cobertura;
+
+      // Validar que la cobertura sea un número válido
+      if (isNaN(cobertura) || cobertura <= 0) {
+        setError(`La cobertura debe ser un número válido mayor a 0`);
+        return;
+      }
+
+      // Validar cobertura según el tipo
+      if (tipo === 'medico' && (cobertura < 0 || cobertura > 100)) {
+        setError('La cobertura para seguros médicos debe ser un porcentaje entre 0 y 100');
+        return;
+      }
+
+      // Preparar los datos para enviar
+      const submitData = {
+        nombre: formData.nombre.trim(),
+        descripcion: formData.descripcion.trim(),
+        tipo: tipo,
+        cobertura: parseFloat(cobertura).toFixed(2),
+        beneficios: formData.beneficios.trim(),
+        requisitos: formData.requisitos.trim(),
+        precio_base: parseFloat(formData.precio_base).toFixed(2),
+        estado: formData.estado || 'activo'
+      };
+
+      // Validar que ningún campo sea undefined o null
+      for (const [key, value] of Object.entries(submitData)) {
+        if (value === undefined || value === null || value === '') {
+          setError(`El campo ${key} no puede estar vacío`);
+          return;
+        }
+      }
+
+      console.log('Datos a enviar:', submitData);
+
       const config = {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       };
 
+      let response;
       if (selectedInsurance) {
-        await axios.put(`/api/seguros/${selectedInsurance.id}`, formData, config);
-        setSuccessMessage('Seguro actualizado exitosamente');
+        console.log('Actualizando seguro existente:', selectedInsurance.id);
+        response = await axios.put(
+          `/api/seguros/${selectedInsurance.id}`,
+          submitData,
+          config
+        );
       } else {
-        await axios.post('/api/seguros', formData, config);
-        setSuccessMessage('Seguro creado exitosamente');
+        console.log('Creando nuevo seguro');
+        response = await axios.post(
+          '/api/seguros',
+          submitData,
+          config
+        );
       }
-      handleCloseDialog();
-      fetchInsurances();
+
+      console.log('Respuesta del servidor:', response.data);
+
+      if (response.data.success) {
+        setError(null);
+        handleCloseDialog();
+        fetchInsurances();
+      } else {
+        setError(response.data.message || 'Error al guardar el seguro');
+      }
     } catch (error) {
-      if (error.response?.status === 401) {
-        setError('Sesión expirada. Por favor, inicie sesión nuevamente.');
-      } else {
-        setError(error.response?.data?.message || 'Error al procesar el seguro');
-      }
-    } finally {
-      setLoading(false);
+      console.error('Error completo:', error);
+      console.error('Datos del error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      setError(error.response?.data?.message || 'Error al guardar el seguro');
     }
   };
 
@@ -230,64 +308,62 @@ const InsuranceManagement = () => {
       {/* Tabla de Seguros */}
       <Paper>
         <TableContainer>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Tipo</TableCell>
-              <TableCell>Cobertura</TableCell>
-              <TableCell>Precio Base</TableCell>
-                <TableCell>Duración</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {insurances.map((insurance) => (
-              <TableRow key={insurance.id}>
-                <TableCell>{insurance.nombre}</TableCell>
-                  <TableCell>{insurance.tipo === 'medico' ? 'Médico' : 'Vida'}</TableCell>
-                <TableCell>
-                    {insurance.tipo === 'medico' 
-                      ? `${insurance.cobertura}%` 
-                      : `$${insurance.cobertura}`}
-                </TableCell>
-                <TableCell>${insurance.precio_base}</TableCell>
-                  <TableCell>{insurance.duracion_meses} meses</TableCell>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nombre</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Cobertura</TableCell>
+                <TableCell>Precio Base</TableCell>
+                <TableCell>Estado</TableCell>
+                <TableCell>Acciones</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {insurances.map((insurance) => (
+                <TableRow key={insurance.id}>
+                  <TableCell>{insurance.nombre}</TableCell>
+                  <TableCell>{insurance.tipo_seguro_id === 2 ? 'Médico' : 'Vida'}</TableCell>
+                  <TableCell>
+                    {insurance.tipo_seguro_id === 2 
+                      ? `${insurance.porcentaje_cobertura}%` 
+                      : `$${insurance.monto_cobertura}`}
+                  </TableCell>
+                  <TableCell>${insurance.precio_base}</TableCell>
                   <TableCell>
                     <Chip
                       label={insurance.estado === 'activo' ? 'Activo' : 'Inactivo'}
                       color={insurance.estado === 'activo' ? 'success' : 'error'}
                     />
                   </TableCell>
-                <TableCell>
+                  <TableCell>
                     <IconButton
                       color="primary"
                       onClick={() => handleOpenDialog(insurance)}
                       size="small"
                     >
-                    <EditIcon />
-                  </IconButton>
+                      <EditIcon />
+                    </IconButton>
                     <IconButton
                       color="error"
                       onClick={() => handleDelete(insurance.id)}
                       size="small"
                     >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Paper>
 
       {/* Diálogo de Formulario */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-            <DialogTitle>
+        <DialogTitle>
           {selectedInsurance ? 'Editar Seguro' : 'Nuevo Seguro'}
-            </DialogTitle>
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={3} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
@@ -301,18 +377,21 @@ const InsuranceManagement = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Tipo"
-                name="tipo"
-                select
-                value={formData.tipo}
+              <FormControl fullWidth>
+                <InputLabel>Tipo de Seguro</InputLabel>
+                <Select
+                  name="tipo_seguro_id"
+                  value={formData.tipo_seguro_id}
                   onChange={handleInputChange}
                   required
-              >
-                <MenuItem value="medico">Médico</MenuItem>
-                <MenuItem value="vida">Vida</MenuItem>
-              </TextField>
+                >
+                  {types.map((type) => (
+                    <MenuItem key={type.id} value={type.id}>
+                      {type.nombre}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField
@@ -326,25 +405,47 @@ const InsuranceManagement = () => {
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label={formData.tipo === 'medico' ? 'Porcentaje de Cobertura (%)' : 'Monto de Cobertura ($)'}
-                name="cobertura"
-                type="number"
-                value={formData.cobertura}
-                onChange={handleInputChange}
-                required
-                InputProps={{
-                  inputProps: { 
-                    min: 0,
-                    max: formData.tipo === 'medico' ? 100 : undefined,
-                    step: formData.tipo === 'medico' ? 1 : 0.01
-                  }
-                }}
-                helperText={formData.tipo === 'medico' ? 'Ingrese el porcentaje de gastos médicos que se cubrirá' : 'Ingrese el monto que se pagará en caso de fallecimiento'}
-              />
-            </Grid>
+            {formData.tipo_seguro_id === 2 && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Porcentaje de Cobertura (%)"
+                  name="porcentaje_cobertura"
+                  type="number"
+                  value={formData.porcentaje_cobertura}
+                  onChange={handleInputChange}
+                  required
+                  InputProps={{
+                    inputProps: { 
+                      min: 0,
+                      max: 100,
+                      step: 1
+                    }
+                  }}
+                  helperText="Ingrese el porcentaje de gastos médicos que se cubrirá"
+                />
+              </Grid>
+            )}
+            {formData.tipo_seguro_id === 1 && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Monto de Cobertura ($)"
+                  name="monto_cobertura"
+                  type="number"
+                  value={formData.monto_cobertura}
+                  onChange={handleInputChange}
+                  required
+                  InputProps={{
+                    inputProps: { 
+                      min: 0,
+                      step: 0.01
+                    }
+                  }}
+                  helperText="Ingrese el monto que se pagará en caso de fallecimiento"
+                />
+              </Grid>
+            )}
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -363,35 +464,18 @@ const InsuranceManagement = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Duración (meses)"
-                name="duracion_meses"
-                type="number"
-                value={formData.duracion_meses}
-                onChange={handleInputChange}
-                required
-                InputProps={{
-                  inputProps: { 
-                    min: 1,
-                    step: 1
-                  }
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Estado"
+              <FormControl fullWidth>
+                <InputLabel>Estado</InputLabel>
+                <Select
                   name="estado"
-                select
                   value={formData.estado}
                   onChange={handleInputChange}
                   required
                 >
                   <MenuItem value="activo">Activo</MenuItem>
                   <MenuItem value="inactivo">Inactivo</MenuItem>
-              </TextField>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField
@@ -420,8 +504,8 @@ const InsuranceManagement = () => {
               />
             </Grid>
           </Grid>
-            </DialogContent>
-            <DialogActions>
+        </DialogContent>
+        <DialogActions>
           <Button onClick={handleCloseDialog} disabled={loading}>
             Cancelar
           </Button>
@@ -433,7 +517,7 @@ const InsuranceManagement = () => {
           >
             {loading ? 'Guardando...' : selectedInsurance ? 'Actualizar' : 'Crear'}
           </Button>
-            </DialogActions>
+        </DialogActions>
       </Dialog>
 
       <Snackbar

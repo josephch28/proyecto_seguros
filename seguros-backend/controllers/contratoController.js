@@ -606,18 +606,21 @@ const updateContrato = async (req, res) => {
 const updateContratoDocumentos = async (req, res) => {
     try {
         const { id } = req.params;
-        const { beneficiarios, firma_cliente } = req.body;
+        const { beneficiarios } = req.body;
         const { userRole, userId } = req.user;
 
         console.log('Datos recibidos:', {
             id,
             beneficiarios,
-            firma_cliente,
-            file: req.file ? {
-                originalname: req.file.originalname,
-                size: req.file.size,
-                mimetype: req.file.mimetype
-            } : 'No file'
+            files: req.files ? Object.keys(req.files).map(field => ({
+                field,
+                files: req.files[field].map(f => ({
+                    fieldname: f.fieldname,
+                    originalname: f.originalname,
+                    size: f.size,
+                    mimetype: f.mimetype
+                }))
+            })) : 'No files'
         });
 
         // Obtener el contrato actual
@@ -655,60 +658,136 @@ const updateContratoDocumentos = async (req, res) => {
         }
 
         // Manejar historia médica
-        if (req.file) {
-            console.log('Iniciando subida de archivo:', {
-                originalName: req.file.originalname,
-                subfolder: `historia-medica/${id}`,
-                size: req.file.size
+        if (req.files && req.files.historia_medica && req.files.historia_medica[0]) {
+            const file = req.files.historia_medica[0];
+            console.log('Iniciando subida de historia médica:', {
+                originalName: file.originalname,
+                contratoId: id,
+                size: file.size
             });
 
             try {
-                const filePath = await fileStorageService.saveFile(req.file, id);
+                const filePath = await fileStorageService.saveFile(file, id, 'historia-medica');
                 updates.push('historia_medica_path = ?');
                 values.push(filePath);
-                console.log('Archivo guardado correctamente:', {
+                console.log('Historia médica guardada correctamente:', {
                     path: filePath,
-                    size: req.file.size
+                    size: file.size
                 });
             } catch (error) {
-                console.error('Error al guardar archivo:', error);
+                console.error('Error al guardar historia médica:', error);
                 return res.status(500).json({
                     success: false,
-                    message: 'Error al guardar el archivo'
+                    message: 'Error al guardar la historia médica'
                 });
+            }
+        }
+
+        // Manejar documentos personales del cliente
+        if (req.files && req.files.documentos_cliente && req.files.documentos_cliente[0]) {
+            const file = req.files.documentos_cliente[0];
+            console.log('Iniciando subida de documentos personales:', {
+                originalName: file.originalname,
+                contratoId: id,
+                size: file.size
+            });
+
+            try {
+                const filePath = await fileStorageService.saveFile(file, id, 'documentos-cliente');
+                updates.push('documentos_cliente_path = ?');
+                values.push(filePath);
+                console.log('Documentos personales guardados correctamente:', {
+                    path: filePath,
+                    size: file.size
+                });
+            } catch (error) {
+                console.error('Error al guardar documentos personales:', error);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error al guardar los documentos personales'
+                });
+            }
+        }
+
+        // Manejar documentos de beneficiarios
+        if (req.files && req.files.documentos_beneficiarios && req.files.documentos_beneficiarios.length > 0) {
+            const beneficiariosFiles = req.files.documentos_beneficiarios;
+            const documentosBeneficiarios = {};
+
+            for (const file of beneficiariosFiles) {
+                try {
+                    const filePath = await fileStorageService.saveFile(file, id, 'documentos-beneficiarios');
+                    // Extraer el ID del beneficiario del nombre del archivo (asumiendo formato: beneficiario_[id].pdf)
+                    const beneficiarioId = file.originalname.split('_')[1]?.split('.')[0];
+                    if (beneficiarioId) {
+                        documentosBeneficiarios[beneficiarioId] = filePath;
+                    }
+                } catch (error) {
+                    console.error('Error al guardar documento de beneficiario:', error);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Error al guardar los documentos de los beneficiarios'
+                    });
+                }
+            }
+
+            if (Object.keys(documentosBeneficiarios).length > 0) {
+                updates.push('documentos_beneficiarios = ?');
+                values.push(JSON.stringify(documentosBeneficiarios));
             }
         }
 
         // Manejar beneficiarios
         if (beneficiarios) {
-                    updates.push('beneficiarios = ?');
+            updates.push('beneficiarios = ?');
             values.push(JSON.stringify(beneficiarios));
-                }
+        }
 
         // Manejar firma del cliente
-        if (firma_cliente) {
-            updates.push('firma_cliente = ?');
-            values.push(firma_cliente);
+        if (req.files && req.files.firma_cliente && req.files.firma_cliente[0]) {
+            const file = req.files.firma_cliente[0];
+            console.log('Iniciando subida de firma:', {
+                originalName: file.originalname,
+                contratoId: id,
+                size: file.size,
+                mimetype: file.mimetype
+            });
+
+            try {
+                const filePath = await fileStorageService.saveFile(file, id, 'firmas');
+                updates.push('firma_cliente = ?');
+                values.push(filePath);
+                console.log('Firma guardada correctamente:', {
+                    path: filePath,
+                    size: file.size
+                });
+            } catch (error) {
+                console.error('Error al guardar firma:', error);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Error al guardar la firma'
+                });
+            }
         }
 
         // Actualizar el contrato
         if (updates.length > 0) {
             const query = `UPDATE contratos SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`;
-        values.push(id);
+            values.push(id);
 
             console.log('Ejecutando query:', query);
             console.log('Valores:', values);
 
             const [result] = await pool.query(query, values);
 
-        if (result.affectedRows === 0) {
+            if (result.affectedRows === 0) {
                 return res.status(400).json({
-                success: false,
-                message: 'Error al actualizar el contrato'
-            });
-        }
+                    success: false,
+                    message: 'Error al actualizar el contrato'
+                });
+            }
 
-        // Obtener el contrato actualizado
+            // Obtener el contrato actualizado
             const [contratosActualizados] = await pool.query(
                 'SELECT * FROM contratos WHERE id = ?',
                 [id]
@@ -719,17 +798,20 @@ const updateContratoDocumentos = async (req, res) => {
                 id: contratoActualizado.id,
                 estado: contratoActualizado.estado,
                 tiene_historia_medica: !!contratoActualizado.historia_medica_path,
-                historia_medica_path: contratoActualizado.historia_medica_path,
+                tiene_documentos_cliente: !!contratoActualizado.documentos_cliente_path,
+                tiene_documentos_beneficiarios: !!contratoActualizado.documentos_beneficiarios,
                 tiene_beneficiarios: !!contratoActualizado.beneficiarios,
                 tiene_firma: !!contratoActualizado.firma_cliente
             });
 
-        res.json({
-            success: true,
-            message: 'Documentos actualizados correctamente',
+            res.json({
+                success: true,
+                message: 'Documentos actualizados correctamente',
                 data: {
                     estado: contratoActualizado.estado,
                     tiene_historia_medica: !!contratoActualizado.historia_medica_path,
+                    tiene_documentos_cliente: !!contratoActualizado.documentos_cliente_path,
+                    tiene_documentos_beneficiarios: !!contratoActualizado.documentos_beneficiarios,
                     tiene_beneficiarios: !!contratoActualizado.beneficiarios,
                     tiene_firma: !!contratoActualizado.firma_cliente
                 }
@@ -738,13 +820,13 @@ const updateContratoDocumentos = async (req, res) => {
             res.json({
                 success: true,
                 message: 'No hay cambios para actualizar'
-        });
+            });
         }
     } catch (error) {
-        console.error('Error en updateContratoDocumentos:', error);
+        console.error('Error al actualizar documentos del contrato:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al actualizar los documentos: ' + error.message
+            message: 'Error al actualizar los documentos del contrato: ' + error.message
         });
     }
 };
@@ -897,124 +979,91 @@ const getContratoDetalles = async (req, res) => {
 // Obtener contrato por ID
 const getContratoById = async (req, res) => {
     try {
-        const { id: contratoId } = req.params;
-        const { userRole, userId } = req;
+        const { id } = req.params;
+        const { userRole, userId } = req.user;
 
-        console.log('\n=== GET CONTRATO BY ID ===');
-        console.log('Parámetros recibidos:', { contratoId, userRole, userId });
+        console.log('Obteniendo contrato:', { id, userRole, userId });
 
-        // Obtener detalles del contrato
         const [contratos] = await pool.query(
-            `SELECT c.*, u.rol as cliente_rol 
-            FROM contratos c
-             JOIN usuarios u ON c.cliente_id = u.id 
-             WHERE c.id = ?`,
-            [contratoId]
+            'SELECT * FROM contratos WHERE id = ?',
+            [id]
         );
 
         if (contratos.length === 0) {
-            console.log('Contrato no encontrado');
-                return res.status(404).json({
-                    success: false,
+            return res.status(404).json({
+                success: false,
                 message: 'Contrato no encontrado'
-                });
-            }
+            });
+        }
 
         const contrato = contratos[0];
-        console.log('Contrato encontrado:', {
-            id: contrato.id,
-            estado: contrato.estado,
-            cliente_id: contrato.cliente_id,
-            cliente_rol: contrato.cliente_rol,
-            historia_medica_path: contrato.historia_medica_path,
-            tiene_beneficiarios: !!contrato.beneficiarios
-        });
 
         // Verificar permisos
         if (userRole === 'cliente' && contrato.cliente_id !== userId) {
-            console.log('Acceso denegado: cliente intentando acceder a contrato de otro cliente');
             return res.status(403).json({
-                    success: false,
+                success: false,
                 message: 'No tienes permiso para ver este contrato'
-                });
-            }
-
-        // Verificar si existe el archivo de historia médica
-        let tieneHistoriaMedica = false;
-        if (contrato.historia_medica_path) {
-            console.log('Verificando existencia de historia médica:', contrato.historia_medica_path);
-            try {
-                // Asegurarse de que la ruta sea relativa al directorio de uploads
-                const relativePath = contrato.historia_medica_path.replace(/^\/+/, '');
-                console.log('Ruta relativa normalizada:', relativePath);
-
-                const fileExists = await fileStorageService.fileExists(relativePath);
-                console.log('¿Existe el archivo?', fileExists);
-                tieneHistoriaMedica = fileExists;
-
-                if (!fileExists) {
-                    console.log('Archivo no encontrado, actualizando base de datos');
-                    await pool.query(
-                        'UPDATE contratos SET historia_medica_path = NULL WHERE id = ?',
-                        [contratoId]
-                    );
-                    contrato.historia_medica_path = null;
-                } else {
-                    // Si el archivo existe, mantener la ruta relativa
-                    contrato.historia_medica_path = relativePath;
-                }
-                } catch (error) {
-                console.error('Error al verificar archivo:', error);
-                tieneHistoriaMedica = false;
-            }
-        } else {
-            console.log('No hay ruta de historia médica en la base de datos');
+            });
         }
 
-        // Procesar beneficiarios
-        let beneficiarios = [];
-        if (contrato.beneficiarios) {
-            try {
-                // Primero intentamos parsear el JSON directamente
-                beneficiarios = JSON.parse(contrato.beneficiarios);
-                console.log('Beneficiarios parseados directamente:', beneficiarios);
-            } catch (error) {
-                try {
-                    // Si falla, intentamos parsear el string escapado
-                    const unescapedJson = contrato.beneficiarios.replace(/\\"/g, '"');
-                    beneficiarios = JSON.parse(unescapedJson);
-                    console.log('Beneficiarios parseados después de unescape:', beneficiarios);
-                } catch (secondError) {
-                    console.error('Error al parsear beneficiarios:', secondError);
-                    beneficiarios = [];
-                }
+        // Parsear campos JSON
+        try {
+            if (contrato.beneficiarios) {
+                contrato.beneficiarios = JSON.parse(contrato.beneficiarios);
+            } else {
+                contrato.beneficiarios = [];
             }
-        }
 
-        const response = {
-            ...contrato,
-            tiene_historia_medica: tieneHistoriaMedica,
-            beneficiarios: beneficiarios
-        };
+            if (contrato.documentos_beneficiarios) {
+                contrato.documentos_beneficiarios = JSON.parse(contrato.documentos_beneficiarios);
+            } else {
+                contrato.documentos_beneficiarios = {};
+            }
 
-        console.log('Enviando respuesta:', {
-            id: response.id,
-            estado: response.estado,
-            tiene_historia_medica: response.tiene_historia_medica,
-            tiene_beneficiarios: beneficiarios.length > 0,
-            beneficiarios: beneficiarios
-        });
+            // Obtener información del cliente
+            const [clientes] = await pool.query(
+                'SELECT id, nombre, apellido, email, telefono FROM usuarios WHERE id = ?',
+                [contrato.cliente_id]
+            );
+
+            if (clientes.length > 0) {
+                contrato.cliente = clientes[0];
+            }
+
+            // Obtener información del agente
+            const [agentes] = await pool.query(
+                'SELECT id, nombre, apellido, email, telefono FROM usuarios WHERE id = ?',
+                [contrato.agente_id]
+            );
+
+            if (agentes.length > 0) {
+                contrato.agente = agentes[0];
+            }
+
+            console.log('Contrato encontrado:', {
+                id: contrato.id,
+                estado: contrato.estado,
+                tiene_beneficiarios: Array.isArray(contrato.beneficiarios),
+                num_beneficiarios: contrato.beneficiarios.length,
+                tiene_documentos: !!contrato.documentos_beneficiarios
+            });
 
             res.json({
                 success: true,
-            data: response
+                data: contrato
             });
+        } catch (error) {
+            console.error('Error al parsear datos del contrato:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Error al procesar los datos del contrato'
+            });
+        }
     } catch (error) {
-        console.error('Error en getContratoById:', error);
+        console.error('Error al obtener contrato:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al obtener el contrato',
-            error: error.message
+            message: 'Error al obtener el contrato'
         });
     }
 };
@@ -1149,6 +1198,187 @@ const getHistoriaMedica = async (req, res) => {
     }
 };
 
+const obtenerDocumentosCliente = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userRole, userId } = req.user;
+
+        console.log('Obteniendo documentos del cliente:', { id, userRole, userId });
+
+        const [contratos] = await pool.query(
+            'SELECT documentos_cliente_path FROM contratos WHERE id = ?',
+            [id]
+        );
+
+        if (contratos.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Contrato no encontrado'
+            });
+        }
+
+        const contrato = contratos[0];
+
+        // Verificar permisos
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para ver estos documentos'
+            });
+        }
+
+        if (!contrato.documentos_cliente_path) {
+            return res.status(404).json({
+                success: false,
+                message: 'No hay documentos del cliente disponibles'
+            });
+        }
+
+        try {
+            const fileBuffer = await fileStorageService.getFile(contrato.documentos_cliente_path);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `inline; filename="documentos_cliente.pdf"`);
+            res.send(fileBuffer);
+        } catch (error) {
+            console.error('Error al obtener documentos del cliente:', error);
+            res.status(404).json({
+                success: false,
+                message: 'Error al obtener los documentos del cliente'
+            });
+        }
+    } catch (error) {
+        console.error('Error en obtenerDocumentosCliente:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener los documentos del cliente'
+        });
+    }
+};
+
+const obtenerDocumentosBeneficiario = async (req, res) => {
+    try {
+        const { id, beneficiarioId } = req.params;
+        const { userRole, userId } = req.user;
+
+        console.log('Obteniendo documentos del beneficiario:', { id, beneficiarioId, userRole, userId });
+
+        const [contratos] = await pool.query(
+            'SELECT documentos_beneficiarios FROM contratos WHERE id = ?',
+            [id]
+        );
+
+        if (contratos.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Contrato no encontrado'
+            });
+        }
+
+        const contrato = contratos[0];
+
+        // Verificar permisos
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para ver estos documentos'
+            });
+        }
+
+        if (!contrato.documentos_beneficiarios) {
+            return res.status(404).json({
+                success: false,
+                message: 'No hay documentos de beneficiarios disponibles'
+            });
+        }
+
+        try {
+            const documentosBeneficiarios = JSON.parse(contrato.documentos_beneficiarios);
+            const documentoPath = documentosBeneficiarios[beneficiarioId];
+
+            if (!documentoPath) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No hay documentos disponibles para este beneficiario'
+                });
+            }
+
+            const fileBuffer = await fileStorageService.getFile(documentoPath);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `inline; filename="documento_beneficiario_${beneficiarioId}.pdf"`);
+            res.send(fileBuffer);
+        } catch (error) {
+            console.error('Error al obtener documentos del beneficiario:', error);
+            res.status(404).json({
+                success: false,
+                message: 'Error al obtener los documentos del beneficiario'
+            });
+        }
+    } catch (error) {
+        console.error('Error en obtenerDocumentosBeneficiario:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener los documentos del beneficiario'
+        });
+    }
+};
+
+const obtenerFirmaCliente = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userRole, userId } = req.user;
+
+        console.log('Obteniendo firma del cliente:', { id, userRole, userId });
+
+        const [contratos] = await pool.query(
+            'SELECT firma_cliente FROM contratos WHERE id = ?',
+            [id]
+        );
+
+        if (contratos.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Contrato no encontrado'
+            });
+        }
+
+        const contrato = contratos[0];
+
+        // Verificar permisos
+        if (userRole === 'cliente' && contrato.cliente_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'No tienes permiso para ver esta firma'
+            });
+        }
+
+        if (!contrato.firma_cliente) {
+            return res.status(404).json({
+                success: false,
+                message: 'No hay firma disponible'
+            });
+        }
+
+        try {
+            const fileBuffer = await fileStorageService.getFile(contrato.firma_cliente);
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Content-Disposition', `inline; filename="firma_cliente.png"`);
+            res.send(fileBuffer);
+        } catch (error) {
+            console.error('Error al obtener firma del cliente:', error);
+            res.status(404).json({
+                success: false,
+                message: 'Error al obtener la firma del cliente'
+            });
+        }
+    } catch (error) {
+        console.error('Error en obtenerFirmaCliente:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener la firma del cliente'
+        });
+    }
+};
+
 module.exports = {
     getContratos,
     getContratosByCliente,
@@ -1164,5 +1394,8 @@ module.exports = {
     getContratoById,
     obtenerHistoriaMedica,
     deleteContrato,
-    getHistoriaMedica
+    getHistoriaMedica,
+    obtenerDocumentosCliente,
+    obtenerDocumentosBeneficiario,
+    obtenerFirmaCliente
 }; 

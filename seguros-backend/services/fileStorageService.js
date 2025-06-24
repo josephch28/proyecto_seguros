@@ -198,26 +198,35 @@ class FileStorageService {
         }
     }
 
-    async saveFile(file, subfolder = '') {
+    async saveFile(file, contratoId, tipo = '') {
         try {
             console.log('\n=== GUARDANDO ARCHIVO ===');
             console.log('Archivo recibido:', {
                 originalname: file.originalname,
                 mimetype: file.mimetype,
-                size: file.size
+                size: file.size,
+                contratoId,
+                tipo
             });
+
+            // Crear estructura de carpetas: uploads/contrato_[id]/[tipo]
+            const contratoDir = path.join(this.uploadDir, `contrato_${contratoId}`);
+            const tipoDir = tipo ? path.join(contratoDir, tipo) : contratoDir;
+
+            // Crear directorios si no existen
+            await fs.mkdir(tipoDir, { recursive: true });
+            console.log('Directorio creado:', tipoDir);
 
             const timestamp = Date.now();
             const filename = `${timestamp}-${file.originalname}`;
-            const filepath = path.join(this.uploadDir, subfolder, filename);
+            const filepath = path.join(tipoDir, filename);
 
             console.log('Ruta del archivo:', filepath);
 
-            await fs.mkdir(path.dirname(filepath), { recursive: true });
             await fs.writeFile(filepath, file.buffer);
 
             // Devolver la ruta relativa para almacenar en la base de datos
-            const relativePath = path.join(subfolder, filename).replace(/\\/g, '/');
+            const relativePath = path.join(`contrato_${contratoId}`, tipo, filename).replace(/\\/g, '/');
             console.log('Ruta relativa guardada:', relativePath);
 
             return relativePath;
@@ -230,27 +239,25 @@ class FileStorageService {
     async getFile(filePath) {
         try {
             console.log('\n=== OBTENIENDO ARCHIVO ===');
-            console.log('Ruta solicitada:', filePath);
+            console.log('Ruta del archivo:', filePath);
 
-            // Asegurarse de que la ruta sea relativa al directorio de uploads
-            const relativePath = filePath.replace(/^\/+/, '');
-            const fullPath = path.join(this.uploadDir, relativePath);
+            // Construir la ruta completa
+            const fullPath = path.join(this.uploadDir, filePath);
+            console.log('Ruta completa:', fullPath);
 
-            console.log('Rutas procesadas:', {
-                original: filePath,
-                relative: relativePath,
-                full: fullPath
-            });
-
-            const fileExists = await this.fileExists(relativePath);
-            if (!fileExists) {
-                console.log('Archivo no encontrado');
+            // Verificar si el archivo existe
+            try {
+                await fs.access(fullPath);
+            } catch (error) {
+                console.error('Archivo no encontrado:', fullPath);
                 throw new Error('Archivo no encontrado');
             }
 
-            const file = await fs.readFile(fullPath);
-            console.log('Archivo leído exitosamente');
-            return file;
+            // Leer el archivo
+            const fileBuffer = await fs.readFile(fullPath);
+            console.log('Archivo leído correctamente, tamaño:', fileBuffer.length);
+
+            return fileBuffer;
         } catch (error) {
             console.error('Error al obtener archivo:', error);
             throw error;
@@ -259,56 +266,10 @@ class FileStorageService {
 
     async fileExists(filePath) {
         try {
-            console.log('\n=== VERIFICANDO EXISTENCIA DE ARCHIVO ===');
-            console.log('Ruta recibida:', filePath);
-
-            if (!filePath) {
-                console.log('Ruta no proporcionada');
-                return false;
-            }
-
-            // Asegurarse de que la ruta sea relativa al directorio de uploads
-            const relativePath = filePath.replace(/^\/+/, '');
-            const fullPath = path.join(this.uploadDir, relativePath);
-
-            console.log('Rutas procesadas:', {
-                original: filePath,
-                relative: relativePath,
-                full: fullPath,
-                uploadDir: this.uploadDir
-            });
-
-            try {
-                // Verificar si el archivo existe
-                await fs.access(fullPath);
-                const stats = await fs.stat(fullPath);
-                
-                const exists = stats.isFile();
-                console.log('Resultado de verificación:', {
-                    exists,
-                    isFile: stats.isFile(),
-                    size: stats.size,
-                    lastModified: stats.mtime,
-                    path: fullPath
-                });
-
-                if (exists) {
-                    // Verificar que el archivo sea legible
-                    await fs.readFile(fullPath);
-                    console.log('Archivo verificado y legible');
-                }
-
-                return exists;
-            } catch (error) {
-                console.log('Error al verificar archivo:', {
-                    message: error.message,
-                    code: error.code,
-                    path: fullPath
-                });
-                return false;
-            }
+            const fullPath = path.join(this.uploadDir, filePath);
+            await fs.access(fullPath);
+            return true;
         } catch (error) {
-            console.error('Error en fileExists:', error);
             return false;
         }
     }
