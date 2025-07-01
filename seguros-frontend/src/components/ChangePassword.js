@@ -90,7 +90,7 @@ const ChangePassword = () => {
       setError('');
 
       const response = await axios.put(
-        'http://localhost:3001/api/users/profile',
+        'http://localhost:3006/api/users/profile',
         {
           contrasena_actual: formData.contrasena_actual,
           nueva_contrasena: formData.nueva_contrasena

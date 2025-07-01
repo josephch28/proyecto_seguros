@@ -71,7 +71,7 @@ const Profile = ({ open, onClose }) => {
       console.log('Profile - Fetching user data for ID:', authUser.id);
       
       const response = await axios.get(
-        `http://localhost:3001/api/users/${authUser.id}`,
+        `http://localhost:3006/api/users/${authUser.id}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -97,7 +97,7 @@ const Profile = ({ open, onClose }) => {
           foto_perfil: userData.foto_perfil || null
         });
         if (userData.foto_perfil) {
-          setPreviewUrl(`http://localhost:3001/uploads/${userData.foto_perfil}?t=${new Date().getTime()}`);
+          setPreviewUrl(`http://localhost:3006/uploads/${userData.foto_perfil}?t=${new Date().getTime()}`);
         }
       } else {
         throw new Error('No se pudo obtener la información del usuario');
@@ -294,7 +294,7 @@ const Profile = ({ open, onClose }) => {
       });
 
       const response = await axios.put(
-        'http://localhost:3001/api/users/profile',
+        'http://localhost:3006/api/users/profile',
         formDataToSend,
         {
           headers: {

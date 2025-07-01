@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
       ...userData,
       rol_nombre: userData.rol_nombre || userData.rol,
       foto_perfil: userData.foto_perfil ? 
-        `http://localhost:3001/uploads/${userData.foto_perfil}?t=${new Date().getTime()}` : 
+        `http://localhost:3006/uploads/${userData.foto_perfil}?t=${new Date().getTime()}` : 
         null,
       cambiarContrasena: Boolean(userData.cambiar_contrasena || userData.cambiarContrasena)
     };
@@ -72,7 +72,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       console.log('Haciendo petición de verificación...');
-      const response = await axios.get('http://localhost:3001/api/auth/verify', {
+      const response = await axios.get('http://localhost:3006/api/auth/verify', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Iniciando login...');
       setLoading(true);
-      const response = await axios.post('http://localhost:3001/api/auth/login', credentials);
+      const response = await axios.post('http://localhost:3006/api/auth/login', credentials);
       
       console.log('Respuesta de login completa:', response.data);
       

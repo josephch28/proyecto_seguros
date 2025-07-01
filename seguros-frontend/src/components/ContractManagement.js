@@ -42,7 +42,7 @@ import SignaturePad from 'react-signature-canvas';
 import { useNavigate } from 'react-router-dom';
 
 // Configuración de la API
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3006/api';
 
 const ContractManagement = () => {
   const [contracts, setContracts] = useState([]);

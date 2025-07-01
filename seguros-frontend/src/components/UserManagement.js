@@ -90,7 +90,7 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       console.log('Fetching users...');
-      const response = await axios.get('http://localhost:3001/api/users', axiosConfig);
+      const response = await axios.get('http://localhost:3006/api/users', axiosConfig);
       console.log('Users response:', response.data);
       
       if (response.data && Array.isArray(response.data)) {
@@ -109,7 +109,7 @@ const UserManagement = () => {
   const fetchRoles = async () => {
     try {
       console.log('Fetching roles...');
-      const response = await axios.get('http://localhost:3001/api/users/roles', axiosConfig);
+      const response = await axios.get('http://localhost:3006/api/users/roles', axiosConfig);
       console.log('Roles response:', response.data);
       
       if (response.data && Array.isArray(response.data)) {
@@ -316,13 +316,13 @@ const UserManagement = () => {
     try {
       if (selectedUser) {
         await axios.put(
-          `http://localhost:3001/api/users/${selectedUser.id}`,
+          `http://localhost:3006/api/users/${selectedUser.id}`,
           formData,
           axiosConfig
         );
         setSuccess('Usuario actualizado exitosamente');
       } else {
-        await axios.post('http://localhost:3001/api/users', formData, axiosConfig);
+        await axios.post('http://localhost:3006/api/users', formData, axiosConfig);
         setSuccess('Usuario creado exitosamente');
       }
       handleCloseDialog();
@@ -365,7 +365,7 @@ const UserManagement = () => {
     if (window.confirm('¿Está seguro de que desea desactivar este usuario?')) {
       try {
         const response = await axios.delete(
-          `http://localhost:3001/api/users/${id}`,
+          `http://localhost:3006/api/users/${id}`,
           axiosConfig
         );
         setSuccess(response.data.message);

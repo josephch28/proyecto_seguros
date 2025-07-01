@@ -74,7 +74,7 @@ const DashboardContent = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      const response = await axios.get('http://localhost:3001/api/client/dashboard', {
+      const response = await axios.get('http://localhost:3006/api/client/dashboard', {
         headers: { Authorization: `Bearer ${token}` }
       });
 

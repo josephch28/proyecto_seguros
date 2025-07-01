@@ -109,7 +109,7 @@ const Navbar = ({ open, toggleDrawer, isMobile }) => {
             >
               <Avatar
                 alt={`${user?.nombre} ${user?.apellido}`}
-                src={user?.foto_perfil ? `http://localhost:3001/uploads/${user.foto_perfil}` : undefined}
+                src={user?.foto_perfil ? `http://localhost:3006/uploads/${user.foto_perfil}` : undefined}
                 sx={{ 
                   width: { xs: 32, sm: 40 }, 
                   height: { xs: 32, sm: 40 }
