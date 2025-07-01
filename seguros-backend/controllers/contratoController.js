@@ -1153,6 +1153,17 @@ const getHistoriaMedica = async (req, res) => {
     }
 };
 
+// STUBS TEMPORALES PARA EVITAR CRASHES
+const obtenerDocumentosCliente = (req, res) => {
+    res.status(501).json({ success: false, message: 'obtenerDocumentosCliente no implementado' });
+};
+const obtenerDocumentosBeneficiario = (req, res) => {
+    res.status(501).json({ success: false, message: 'obtenerDocumentosBeneficiario no implementado' });
+};
+const obtenerFirmaCliente = (req, res) => {
+    res.status(501).json({ success: false, message: 'obtenerFirmaCliente no implementado' });
+};
+
 module.exports = {
     getContratos,
     getContratosByCliente,
@@ -1168,5 +1179,8 @@ module.exports = {
     getContratoById,
     obtenerHistoriaMedica,
     deleteContrato,
-    getHistoriaMedica
+    getHistoriaMedica,
+    obtenerDocumentosCliente,
+    obtenerDocumentosBeneficiario,
+    obtenerFirmaCliente
 }; 

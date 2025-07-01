@@ -46,14 +46,6 @@ const Seguro = sequelize.define('Seguro', {
             min: 0
         }
     },
-    duracion_meses: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        validate: {
-            isInt: true,
-            min: 1
-        }
-    },
     estado: {
         type: DataTypes.ENUM('activo', 'inactivo'),
         allowNull: false,

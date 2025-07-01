@@ -154,77 +154,9 @@ const simularPagoAutomatico = async (req, res) => {
   }
 };
 
-// Obtener pagos de un cliente específico
-const getPagosByCliente = async (req, res) => {
-  try {
-    const clienteId = req.user.id; // ID del cliente desde el token JWT
-    
-    const [pagos] = await pool.query(`
-      SELECT p.*, c.frecuencia_pago, c.monto_pago, s.nombre as nombre_seguro
-      FROM pagos p
-      JOIN contratos c ON p.contrato_id = c.id
-      JOIN seguros s ON c.seguro_id = s.id
-      WHERE c.cliente_id = ?
-      ORDER BY p.fecha_pago DESC, p.created_at DESC
-    `, [clienteId]);
-    
-    res.json(pagos);
-  } catch (error) {
-    console.error('Error al obtener pagos del cliente:', error);
-    res.status(500).json({ message: 'Error al obtener los pagos' });
-  }
-};
-
-// Obtener resumen de pagos del cliente
-const getResumenPagosCliente = async (req, res) => {
-  try {
-    const clienteId = req.user.id; // ID del cliente desde el token JWT
-    
-    // Obtener total pagado
-    const [totalPagado] = await pool.query(`
-      SELECT COALESCE(SUM(p.monto), 0) as total_pagado
-      FROM pagos p
-      JOIN contratos c ON p.contrato_id = c.id
-      WHERE c.cliente_id = ? AND p.estado = 'completado'
-    `, [clienteId]);
-    
-    // Obtener pagos pendientes
-    const [pagosPendientes] = await pool.query(`
-      SELECT COUNT(*) as cantidad_pendientes
-      FROM pagos p
-      JOIN contratos c ON p.contrato_id = c.id
-      WHERE c.cliente_id = ? AND p.estado = 'pendiente'
-    `, [clienteId]);
-    
-    // Obtener próximo pago
-    const [proximoPago] = await pool.query(`
-      SELECT p.fecha_pago, p.monto, s.nombre as nombre_seguro
-      FROM pagos p
-      JOIN contratos c ON p.contrato_id = c.id
-      JOIN seguros s ON c.seguro_id = s.id
-      WHERE c.cliente_id = ? AND p.estado = 'pendiente'
-      ORDER BY p.fecha_pago ASC
-      LIMIT 1
-    `, [clienteId]);
-    
-    res.json({
-      totalPaid: totalPagado[0].total_pagado,
-      pendingPayments: pagosPendientes[0].cantidad_pendientes,
-      nextPaymentDate: proximoPago[0] ? proximoPago[0].fecha_pago : null,
-      nextPaymentAmount: proximoPago[0] ? proximoPago[0].monto : null,
-      nextPaymentInsurance: proximoPago[0] ? proximoPago[0].nombre_seguro : null
-    });
-  } catch (error) {
-    console.error('Error al obtener resumen de pagos:', error);
-    res.status(500).json({ message: 'Error al obtener el resumen de pagos' });
-  }
-};
-
 module.exports = {
   getPagos,
   getPagosByContrato,
-  getPagosByCliente,
-  getResumenPagosCliente,
   registrarPago,
   simularPagoAutomatico
 }; 

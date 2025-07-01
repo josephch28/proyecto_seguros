@@ -55,6 +55,8 @@ const ContractManagement = () => {
   const [success, setSuccess] = useState('');
   const [signaturePad, setSignaturePad] = useState(null);
   const [medicalHistory, setMedicalHistory] = useState(null);
+  const [clientDocuments, setClientDocuments] = useState(null);
+  const [beneficiaryDocuments, setBeneficiaryDocuments] = useState({});
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [userRole, setUserRole] = useState('');
   const [formData, setFormData] = useState({
@@ -74,6 +76,11 @@ const ContractManagement = () => {
   const [signature, setSignature] = useState(null);
   const [userId, setUserId] = useState(null);
   const [selectedInsuranceDetails, setSelectedInsuranceDetails] = useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -192,62 +199,108 @@ const ContractManagement = () => {
   };
 
   // Función para cargar los detalles del contrato
-  const handleOpenDialog = async (contrato) => {
-    try {
-      setLoading(true);
-      setError('');
-      setOpenDialog(true);
+  const handleEdit = async (contract) => {
+    console.log('Contrato seleccionado:', contract);
+    
+    if (contract) {
+      // Modo edición
+      // Asegurarse de que los beneficiarios sean un array
+      const beneficiariosProcesados = processBeneficiaries(contract.beneficiarios);
+      console.log('Beneficiarios procesados:', beneficiariosProcesados);
 
-      const token = localStorage.getItem('token');
-      const response = await axios.get(
-        `${API_URL}/contratos/${contrato.id}/detalles`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
+      setSelectedContract({
+        ...contract,
+        beneficiarios: beneficiariosProcesados
+      });
+
+      setFormData({
+        cliente_id: contract.cliente_id,
+        seguro_id: contract.seguro_id,
+        fecha_inicio: contract.fecha_inicio,
+        fecha_fin: contract.fecha_fin,
+        monto_prima: contract.monto_prima,
+        estado: contract.estado,
+        forma_pago: contract.forma_pago,
+        frecuencia_pago: contract.frecuencia_pago,
+        monto_pago: contract.monto_pago,
+        numero_cuenta: contract.numero_cuenta || '',
+        banco: contract.banco || '',
+        tipo_cuenta: contract.tipo_cuenta || ''
+      });
+
+      // Cargar beneficiarios
+      setBeneficiaries(beneficiariosProcesados);
+
+      // Cargar documentos si existen
+      if (contract.documentos_beneficiarios) {
+        try {
+          const documentosProcesados = typeof contract.documentos_beneficiarios === 'string'
+            ? JSON.parse(contract.documentos_beneficiarios)
+            : contract.documentos_beneficiarios;
+          setBeneficiaryDocuments(documentosProcesados);
+        } catch (error) {
+          console.error('Error al procesar documentos de beneficiarios:', error);
+          setBeneficiaryDocuments({});
         }
-      );
-
-      if (response.data.success) {
-        const detalles = response.data.data;
-        
-        // Asegurarse de que los beneficiarios sean un array
-        const beneficiarios = Array.isArray(detalles.beneficiarios) 
-          ? detalles.beneficiarios 
-          : detalles.beneficiarios ? JSON.parse(detalles.beneficiarios) : [];
-
-        // Actualizar el contrato con los detalles
-        setSelectedContract({
-          ...contrato,
-          ...detalles,
-          beneficiarios
-        });
-
-        setFormData({
-          cliente_id: detalles.cliente_id,
-          seguro_id: detalles.seguro_id,
-          fecha_inicio: detalles.fecha_inicio,
-          fecha_fin: detalles.fecha_fin,
-          monto_prima: detalles.monto_prima,
-          estado: detalles.estado,
-          forma_pago: detalles.forma_pago,
-          frecuencia_pago: detalles.frecuencia_pago,
-          monto_pago: detalles.monto_pago,
-          numero_cuenta: detalles.numero_cuenta || '',
-          banco: detalles.banco || '',
-          tipo_cuenta: detalles.tipo_cuenta || ''
-        });
-
-        setBeneficiaries(beneficiarios);
-        setMedicalHistory(null);
-        setSignature(detalles.firma_cliente || null);
       } else {
-        setError('Error al cargar los detalles del contrato');
+        setBeneficiaryDocuments({});
       }
-    } catch (error) {
-      console.error('Error al cargar detalles del contrato:', error);
-      setError(error.response?.data?.message || 'Error al cargar los detalles del contrato');
-    } finally {
-      setLoading(false);
+
+      // Cargar detalles del seguro
+      if (contract.seguro_id) {
+        const selectedInsurance = insurances.find(i => i.id === contract.seguro_id);
+        if (selectedInsurance) {
+          setSelectedInsuranceDetails(selectedInsurance);
+        }
+      }
+
+      // Cargar firma si existe
+      if (contract.firma_cliente) {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get(
+            `${API_URL}/contratos/${contract.id}/firma`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              responseType: 'blob'
+            }
+          );
+          const firmaUrl = URL.createObjectURL(response.data);
+          setSignature(firmaUrl);
+        } catch (error) {
+          console.error('Error al cargar la firma:', error);
+          setSignature(null);
+        }
+      } else {
+        setSignature(null);
+      }
+    } else {
+      // Modo creación
+      setSelectedContract(null);
+      setFormData({
+        cliente_id: '',
+        seguro_id: '',
+        fecha_inicio: '',
+        fecha_fin: '',
+        monto_prima: '',
+        estado: 'pendiente',
+        forma_pago: 'efectivo',
+        frecuencia_pago: 'mensual',
+        monto_pago: '',
+        banco: '',
+        numero_cuenta: '',
+        tipo_cuenta: ''
+      });
+      setBeneficiaries([]);
+      setBeneficiaryDocuments({});
+      setSelectedInsuranceDetails(null);
+      setSignature(null);
+      if (signaturePad) {
+        signaturePad.clear();
+      }
     }
+
+    setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
@@ -286,18 +339,39 @@ const ContractManagement = () => {
 
   const handleSignatureEnd = () => {
     if (signaturePad) {
-      setSignature(signaturePad.toDataURL());
+      const signatureData = signaturePad.toDataURL('image/png');
+      console.log('Firma capturada:', {
+        type: signatureData.split(';')[0],
+        size: signatureData.length
+      });
+      setSignature(signatureData);
     }
   };
 
-  const handleMedicalHistoryUpload = (e) => {
+  const handleRestoreSignature = () => {
+    if (signaturePad) {
+      signaturePad.clear();
+      setSignature(null);
+    }
+  };
+
+  const handleMedicalHistoryChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.type !== 'application/pdf') {
+        setSnackbar({
+          open: true,
+          message: 'La historia médica debe ser un archivo PDF',
+          severity: 'error'
+        });
+        return;
+      }
       setMedicalHistory(file);
-      setFormData(prev => ({
-        ...prev,
-        historia_medica: file
-      }));
+      setSnackbar({
+        open: true,
+        message: 'Archivo seleccionado: ' + file.name,
+        severity: 'success'
+      });
     }
   };
 
@@ -320,140 +394,112 @@ const ContractManagement = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleFileUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
     try {
       setLoading(true);
-      setError('');
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      setError(null);
 
-      if (userRole === 'cliente') {
-        // Si es cliente, solo actualizar documentos
-        const formData = new FormData();
-        
-        // Validar y agregar historia médica
-        if (medicalHistory) {
-          // Verificar que sea un PDF
-          if (medicalHistory.type !== 'application/pdf') {
-            setError('La historia médica debe ser un archivo PDF');
-            setLoading(false);
-            return;
+      // Verificar que tenemos un contrato seleccionado
+      if (!selectedContract || !selectedContract.id) {
+        setError('No hay un contrato seleccionado');
+        return;
+      }
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      console.log('Subiendo archivos para el contrato:', selectedContract.id);
+      
+      const response = await axios.post(
+        `${API_URL}/contratos/${selectedContract.id}/documentos`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'multipart/form-data'
           }
-          formData.append('historia_medica', medicalHistory);
         }
-        
-        // Agregar beneficiarios
-        if (beneficiaries.length > 0) {
-          // Procesar beneficiarios para enviar el parentesco correcto
-          const beneficiariosProcesados = beneficiaries.map(beneficiary => ({
-            ...beneficiary,
-            parentesco: beneficiary.parentesco === 'otro' ? beneficiary.parentesco_otro : beneficiary.parentesco
-          }));
-          formData.append('beneficiarios', JSON.stringify(beneficiariosProcesados));
-        }
-        
-        // Agregar firma
-        if (signature) {
-          formData.append('firma_cliente', signature);
-        }
+      );
 
-        // Verificar que al menos un documento se está enviando
-        if (!medicalHistory && beneficiaries.length === 0 && !signature) {
-          setError('Debe proporcionar al menos un documento');
-          setLoading(false);
-          return;
-        }
+      console.log('Respuesta del servidor:', response.data);
 
-        console.log('Enviando documentos:', {
-          historia_medica: medicalHistory ? 'presente' : 'ausente',
-          beneficiarios: beneficiaries.length,
-          firma_cliente: signature ? 'presente' : 'ausente'
-        });
-
-        // Enviar los datos
-        const response = await axios.put(
-          `${API_URL}/contratos/${selectedContract.id}/documentos`,
-          formData,
-          {
-            headers: {
-              ...headers,
-              'Content-Type': 'multipart/form-data'
-            }
-          }
-        );
-
-        if (response.data.success) {
-          setSuccess('Documentos actualizados correctamente');
-          // Actualizar el estado del contrato en la lista
-          const updatedContracts = contracts.map(contract => {
-            if (contract.id === selectedContract.id) {
-              return {
-                ...contract,
-                estado: response.data.data.estado,
-                tiene_historia_medica: response.data.data.tiene_historia_medica,
-                tiene_beneficiarios: response.data.data.tiene_beneficiarios,
-                tiene_firma: response.data.data.tiene_firma
-              };
-            }
-            return contract;
-          });
-          setContracts(updatedContracts);
-          handleCloseDialog();
-        } else {
-          setError('Error al actualizar documentos: ' + response.data.message);
-        }
+      if (response.data.success) {
+        setSuccess(response.data.message || 'Archivos subidos exitosamente');
+        // Actualizar la lista de contratos
+        fetchContracts();
       } else {
-        // Lógica para agentes
-        if (!formData.cliente_id || !formData.seguro_id || !formData.fecha_inicio || 
-            !formData.fecha_fin || !formData.monto_prima || !formData.forma_pago || 
-            !formData.frecuencia_pago || !formData.monto_pago) {
-          setError('Los campos cliente, seguro, fechas, monto, forma de pago, frecuencia y monto de pago son requeridos');
-          setLoading(false);
-          return;
-        }
-
-        if (formData.forma_pago === 'transferencia' && 
-            (!formData.numero_cuenta || !formData.banco || !formData.tipo_cuenta)) {
-          setError('Por favor complete los datos bancarios');
-          setLoading(false);
-          return;
-        }
-
-        const data = {
-          cliente_id: formData.cliente_id,
-          seguro_id: formData.seguro_id,
-          fecha_inicio: formData.fecha_inicio,
-          fecha_fin: formData.fecha_fin,
-          monto_prima: parseFloat(formData.monto_prima),
-          estado: formData.estado,
-          forma_pago: formData.forma_pago,
-          frecuencia_pago: formData.frecuencia_pago,
-          monto_pago: parseFloat(formData.monto_pago),
-          numero_cuenta: formData.numero_cuenta || null,
-          banco: formData.banco || null,
-          tipo_cuenta: formData.tipo_cuenta || null,
-          beneficiarios: beneficiaries
-        };
-
-        let response;
-        if (selectedContract) {
-          response = await axios.put(`/api/contratos/${selectedContract.id}`, data, { headers });
-        } else {
-          response = await axios.post('/api/contratos', data, { headers });
-        }
-
-        if (response.data.success) {
-          setSuccess(selectedContract ? 'Contrato actualizado correctamente' : 'Contrato creado correctamente');
-          handleCloseDialog();
-          fetchContracts();
-        } else {
-          setError('Error al procesar la solicitud: ' + response.data.message);
-        }
+        setError(response.data.message || 'Error al subir los archivos');
       }
     } catch (error) {
-      console.error('Error al enviar documentos:', error);
-      setError(error.response?.data?.message || 'Error al actualizar los documentos');
+      console.error('Error al subir archivos:', error);
+      setError(error.response?.data?.message || 'Error al subir los archivos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Validar campos requeridos
+      if (!formData.seguro_id || !formData.fecha_inicio || !formData.fecha_fin) {
+        setError('Todos los campos son requeridos');
+        setLoading(false);
+        return;
+      }
+
+      // Obtener el token del localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('No hay sesión activa. Por favor, inicie sesión.');
+        setLoading(false);
+        return;
+      }
+
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      };
+
+      let response;
+      if (selectedContract) {
+        console.log('Actualizando contrato:', selectedContract.id);
+        response = await axios.put(
+          `${API_URL}/contratos/${selectedContract.id}`,
+          formData,
+          config
+        );
+      } else {
+        console.log('Creando nuevo contrato');
+        response = await axios.post(
+          `${API_URL}/contratos`,
+          formData,
+          config
+        );
+      }
+
+      console.log('Respuesta del servidor:', response.data);
+
+      if (response.data.success) {
+        setSuccess(selectedContract ? 'Contrato actualizado exitosamente' : 'Contrato creado exitosamente');
+        handleCloseDialog();
+        fetchContracts();
+      } else {
+        setError(response.data.message || 'Error al guardar el contrato');
+      }
+    } catch (error) {
+      console.error('Error al guardar:', error);
+      setError(error.response?.data?.message || 'Error al guardar el contrato');
     } finally {
       setLoading(false);
     }
@@ -492,7 +538,7 @@ const ContractManagement = () => {
       setLoading(true);
       setError('');
       const token = localStorage.getItem('token');
-      
+
       // Solo actualizar el estado del contrato
       const response = await axios.put(
         `${API_URL}/contratos/${contratoId}/estado`,
@@ -520,21 +566,6 @@ const ContractManagement = () => {
       setError(error.response?.data?.message || 'Error al actualizar el estado del contrato');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Función para manejar la subida de la historia médica
-  const handleMedicalHistoryChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Verificar que sea un PDF
-      if (file.type !== 'application/pdf') {
-        setError('Por favor, seleccione un archivo PDF');
-        e.target.value = null;
-        return;
-      }
-      setMedicalHistory(file);
-      setError(''); // Limpiar error si el archivo es válido
     }
   };
 
@@ -681,6 +712,197 @@ const ContractManagement = () => {
     }
   };
 
+  // Función para manejar la subida de documentos personales del cliente
+  const handleClientDocumentsChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        setSnackbar({
+          open: true,
+          message: 'Los documentos personales deben ser un archivo PDF',
+          severity: 'error'
+        });
+        return;
+      }
+      setClientDocuments(file);
+      setSnackbar({
+        open: true,
+        message: 'Archivo seleccionado: ' + file.name,
+        severity: 'success'
+      });
+    }
+  };
+
+  // Función para manejar la subida de documentos de beneficiarios
+  const handleBeneficiaryDocumentsChange = (index, e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        setSnackbar({
+          open: true,
+          message: 'Los documentos del beneficiario deben ser un archivo PDF',
+          severity: 'error'
+        });
+        return;
+      }
+      setBeneficiaryDocuments(prev => ({
+        ...prev,
+        [index]: file
+      }));
+      setSnackbar({
+        open: true,
+        message: 'Archivo seleccionado: ' + file.name,
+        severity: 'success'
+      });
+    }
+  };
+
+  // Función para eliminar un beneficiario
+  const handleRemoveBeneficiario = (index) => {
+    setBeneficiaries(prev => prev.filter((_, i) => i !== index));
+    // También eliminar el documento asociado si existe
+    setBeneficiaryDocuments(prev => {
+      const newDocs = { ...prev };
+      delete newDocs[index];
+      return newDocs;
+    });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  // Función para ver los documentos personales del cliente
+  const handleViewClientDocuments = async (contratoId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_URL}/contratos/${contratoId}/documentos-cliente`,
+        {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+        }
+      );
+
+      // Crear un blob con el PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Abrir el PDF en una nueva pestaña
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Error al obtener documentos del cliente:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error al obtener los documentos del cliente',
+        severity: 'error'
+      });
+    }
+  };
+
+  // Función para ver los documentos de un beneficiario
+  const handleViewBeneficiaryDocuments = async (contratoId, beneficiarioIndex) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      // Obtener la ruta del documento del beneficiario
+      const documentosBeneficiarios = JSON.parse(selectedContract.documentos_beneficiarios);
+      console.log('Documentos beneficiarios:', documentosBeneficiarios);
+      
+      if (!documentosBeneficiarios || !documentosBeneficiarios[beneficiarioIndex]) {
+        throw new Error('No se encontró la ruta del documento para este beneficiario');
+      }
+
+      // Obtener la ruta del documento como string
+      const documentoPath = documentosBeneficiarios[beneficiarioIndex];
+      console.log('Ruta del documento:', documentoPath);
+
+      // Construir la URL correcta para obtener el documento
+      const requestUrl = `${API_URL}/uploads/${documentoPath}`;
+      console.log('URL de la petición:', requestUrl);
+
+      const response = await axios.get(
+        requestUrl,
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/pdf'
+          },
+          responseType: 'blob'
+        }
+      );
+
+      // Verificar que la respuesta sea válida
+      if (!response.data || response.data.size === 0) {
+        throw new Error('No se encontraron documentos para este beneficiario');
+      }
+
+      // Crear un blob con el PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      // Crear un iframe oculto para mostrar el PDF
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      
+      // Cargar el PDF en el iframe
+      iframe.src = blobUrl;
+      
+      // Esperar a que el iframe cargue
+      iframe.onload = () => {
+        // Abrir el PDF en una nueva ventana
+        window.open(blobUrl, '_blank');
+        // Limpiar
+        document.body.removeChild(iframe);
+        window.URL.revokeObjectURL(blobUrl);
+      };
+    } catch (error) {
+      console.error('Error al obtener documentos del beneficiario:', error);
+      console.error('Detalles del error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        config: error.config
+      });
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al obtener los documentos del beneficiario',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para ver la firma del cliente
+  const handleViewSignature = async (contratoId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_URL}/contratos/${contratoId}/firma`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+
+      // Crear un blob con la imagen de la firma
+      const blob = new Blob([response.data], { type: 'image/png' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Abrir la firma en una nueva pestaña
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Error al obtener la firma:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error al obtener la firma del cliente',
+        severity: 'error'
+      });
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom>
@@ -709,7 +931,7 @@ const ContractManagement = () => {
             <Button
               variant="contained"
               color="primary"
-              onClick={() => handleOpenDialog()}
+              onClick={() => handleEdit()}
               sx={{ mb: 2 }}
             >
               Crear Nuevo Contrato
@@ -717,8 +939,8 @@ const ContractManagement = () => {
           )}
 
           <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
+        <Table>
+          <TableHead>
                 <TableRow>
                   <TableCell>ID</TableCell>
                   <TableCell>Cliente</TableCell>
@@ -726,35 +948,35 @@ const ContractManagement = () => {
                   <TableCell>Fecha Inicio</TableCell>
                   <TableCell>Fecha Fin</TableCell>
                   <TableCell>Monto Prima</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+              <TableCell>Estado</TableCell>
+              <TableCell>Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
                 {contracts.length > 0 ? (
                   contracts.map((contract) => (
-                    <TableRow key={contract.id}>
+              <TableRow key={contract.id}>
                       <TableCell>{contract.id}</TableCell>
                       <TableCell>{contract.cliente?.nombre || contract.nombre_cliente || 'N/A'}</TableCell>
                       <TableCell>{contract.seguro?.nombre || contract.nombre_seguro || 'N/A'}</TableCell>
-                      <TableCell>{new Date(contract.fecha_inicio).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(contract.fecha_inicio).toLocaleDateString()}</TableCell>
                       <TableCell>{new Date(contract.fecha_fin).toLocaleDateString()}</TableCell>
                       <TableCell>${contract.monto_prima}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={contract.estado}
+                <TableCell>
+                  <Chip
+                    label={contract.estado}
                           color={
                             contract.estado === 'activo' ? 'success' :
                             contract.estado === 'pendiente' ? 'warning' :
                             contract.estado === 'rechazado' ? 'error' :
                             'default'
                           }
-                        />
-                      </TableCell>
-                      <TableCell>
+                  />
+                </TableCell>
+                <TableCell>
                         {userRole === 'agente' ? (
                           <>
-                            <IconButton onClick={() => handleOpenDialog(contract)}>
+                            <IconButton onClick={() => handleEdit(contract)}>
                               <EditIcon />
                             </IconButton>
                             <IconButton onClick={() => handleDelete(contract.id)}>
@@ -764,8 +986,8 @@ const ContractManagement = () => {
                         ) : (
                           <Button
                             variant="outlined"
-                            size="small"
-                            onClick={() => handleOpenDialog(contract)}
+                      size="small"
+                            onClick={() => handleEdit(contract)}
                           >
                             Completar Documentos
                           </Button>
@@ -788,15 +1010,356 @@ const ContractManagement = () => {
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
-          {userRole === 'agente' 
-            ? (selectedContract ? 'Editar Contrato' : 'Nuevo Contrato')
-            : 'Completar Documentos del Contrato'
-          }
+          {selectedContract ? 'Editar Contrato' : 'Nuevo Contrato'}
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={3} sx={{ mt: 1 }}>
-            {userRole === 'agente' ? (
-              <>
+          {userRole === 'cliente' ? (
+            <>
+              {/* Información del Contrato */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Información del Contrato
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Cliente"
+                      value={selectedContract?.nombre_cliente || ''}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Seguro"
+                      value={selectedContract?.nombre_seguro || ''}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Fecha de Inicio"
+                      value={selectedContract?.fecha_inicio ? new Date(selectedContract.fecha_inicio).toLocaleDateString() : ''}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Fecha de Fin"
+                      value={selectedContract?.fecha_fin ? new Date(selectedContract.fecha_fin).toLocaleDateString() : ''}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Monto de Prima"
+                      value={`$${selectedContract?.monto_prima || ''}`}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Estado"
+                      value={selectedContract?.estado || ''}
+                      disabled
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Información de Pago */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Información de Pago
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Método de Pago"
+                      value={selectedContract?.forma_pago || ''}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Frecuencia de Pago"
+                      value={selectedContract?.frecuencia_pago || ''}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Monto por Pago"
+                      value={`$${selectedContract?.monto_pago || ''}`}
+                      disabled
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Detalles del Seguro */}
+              {selectedInsuranceDetails && (
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, mt: 2 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Detalles del Seguro
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Tipo:</strong> {selectedInsuranceDetails.tipo === 'medico' ? 'Médico' : 'Vida'}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Cobertura:</strong>{' '}
+                          {selectedInsuranceDetails.tipo === 'medico' 
+                            ? `${selectedInsuranceDetails.cobertura}% de gastos médicos`
+                            : `$${selectedInsuranceDetails.cobertura} en caso de fallecimiento`}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Beneficios:</strong>
+                        </Typography>
+                        <List>
+                          {selectedInsuranceDetails.beneficios.split(',').map((beneficio, index) => (
+                            <ListItem key={index}>
+                              <ListItemIcon>
+                                <CheckCircleIcon color="success" />
+                              </ListItemIcon>
+                              <ListItemText primary={beneficio.trim()} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Requisitos:</strong>
+                        </Typography>
+                        <List>
+                          {selectedInsuranceDetails.requisitos.split(',').map((requisito, index) => (
+                            <ListItem key={index}>
+                              <ListItemIcon>
+                                <InfoIcon color="info" />
+                              </ListItemIcon>
+                              <ListItemText primary={requisito.trim()} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                </Grid>
+              )}
+
+              {/* Documentos del Cliente */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Documentos del Cliente
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 2
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        Historia Médica
+                      </Typography>
+                      {selectedContract?.historia_medica_path ? (
+                        <Alert severity="success">
+                          Historia médica subida correctamente
+                        </Alert>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outlined"
+                            component="label"
+                            startIcon={<UploadIcon />}
+                          >
+                            Subir Historia Médica
+                            <input
+                              type="file"
+                              hidden
+                              accept=".pdf"
+                              onChange={handleMedicalHistoryChange}
+                            />
+                          </Button>
+                          {medicalHistory && (
+                            <Typography variant="body2" color="textSecondary">
+                              Archivo seleccionado: {medicalHistory.name}
+                            </Typography>
+                          )}
+                        </>
+                      )}
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 2
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        Documentos Personales
+                      </Typography>
+                      {selectedContract?.documentos_cliente_path ? (
+                        <Alert severity="success">
+                          Documentos personales subidos correctamente
+                        </Alert>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outlined"
+                            component="label"
+                            startIcon={<UploadIcon />}
+                          >
+                            Subir Documentos Personales
+                            <input
+                              type="file"
+                              hidden
+                              accept=".pdf"
+                              onChange={handleClientDocumentsChange}
+                            />
+                          </Button>
+                          {clientDocuments && (
+                            <Typography variant="body2" color="textSecondary">
+                              Archivo seleccionado: {clientDocuments.name}
+                            </Typography>
+                          )}
+                        </>
+                      )}
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Beneficiarios */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Beneficiarios
+                </Typography>
+                {selectedContract.beneficiarios && selectedContract.beneficiarios.length > 0 ? (
+                    <List>
+                    {selectedContract.beneficiarios.map((beneficiario, index) => {
+                      // Verificar si existe un documento para este beneficiario
+                      const tieneDocumento = selectedContract.documentos_beneficiarios && 
+                                           selectedContract.documentos_beneficiarios[index] !== undefined;
+                      
+                      return (
+                        <Paper key={index} sx={{ p: 2, mb: 2 }}>
+                          <ListItem>
+                            <ListItemText
+                              primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
+                              secondary={
+                                <>
+                                  <Typography component="span" variant="body2">
+                                    Parentesco: {beneficiario.parentesco}
+                                  </Typography>
+                                  <br />
+                                  <Typography component="span" variant="body2">
+                                    Fecha de Nacimiento: {new Date(beneficiario.fecha_nacimiento).toLocaleDateString()}
+                                  </Typography>
+                                </>
+                              }
+                            />
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              {tieneDocumento ? (
+                                <Button
+                                  variant="outlined"
+                                  onClick={() => handleViewBeneficiaryDocuments(selectedContract.id, index)}
+                                  startIcon={<VisibilityIcon />}
+                                  disabled={loading}
+                                >
+                                  {loading ? 'Cargando...' : 'Ver Documentos'}
+                                </Button>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  Sin documentos
+                                </Typography>
+                              )}
+                            </Box>
+                          </ListItem>
+                        </Paper>
+                      );
+                    })}
+                    </List>
+                  ) : (
+                    <Alert severity="warning">
+                      No se han registrado beneficiarios
+                    </Alert>
+                  )}
+              </Grid>
+
+              {/* Sección de firma */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Firma del Cliente
+                </Typography>
+                {selectedContract?.firma_cliente && !signature ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Typography>Firma existente</Typography>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        if (signaturePad) {
+                          signaturePad.clear();
+                          setSignature(null);
+                        }
+                      }}
+                    >
+                      Limpiar Firma
+                    </Button>
+                  </Box>
+                ) : (
+                  <>
+                    <Box sx={{ border: '1px solid #ccc', borderRadius: 1, p: 1 }}>
+                      <SignaturePad
+                        ref={(ref) => setSignaturePad(ref)}
+                        canvasProps={{
+                          width: 500,
+                          height: 200,
+                          className: 'signature-canvas'
+                        }}
+                        onEnd={handleSignatureEnd}
+                      />
+                    </Box>
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                      <Button
+                        variant="outlined"
+                        onClick={handleRestoreSignature}
+                        disabled={!signature}
+                      >
+                        Restaurar Firma
+                      </Button>
+                    </Box>
+                  </>
+                )}
+              </Box>
+            </>
+          ) : (
+            // Vista para agente/admin
+            <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
                     <InputLabel>Cliente</InputLabel>
@@ -821,7 +1384,7 @@ const ContractManagement = () => {
                     <Select
                       name="seguro_id"
                       value={formData.seguro_id}
-                      onChange={handleInsuranceChange}
+                    onChange={handleInsuranceChange}
                       required
                       disabled={!!selectedContract}
                     >
@@ -881,11 +1444,15 @@ const ContractManagement = () => {
                       required
                     >
                       <MenuItem value="pendiente">Pendiente</MenuItem>
+                      <MenuItem value="pendiente_revision">Pendiente de Revisión</MenuItem>
                       <MenuItem value="activo">Activo</MenuItem>
                       <MenuItem value="inactivo">Inactivo</MenuItem>
+                      <MenuItem value="rechazado">Rechazado</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
+
+              {/* Configuración de Pago */}
                 <Grid item xs={12}>
                   <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                     Configuración de Pago
@@ -932,6 +1499,8 @@ const ContractManagement = () => {
                     inputProps={{ min: 0 }}
                   />
                 </Grid>
+
+              {/* Campos bancarios (solo si el método de pago es transferencia) */}
                 {formData.forma_pago === 'transferencia' && (
                   <>
                     <Grid item xs={12} md={4}>
@@ -971,9 +1540,65 @@ const ContractManagement = () => {
                   </>
                 )}
 
-                {/* Sección de Documentos del Cliente (solo visible cuando se está editando un contrato) */}
-                {selectedContract && (
-                  <>
+              {/* Detalles del Seguro */}
+              {selectedInsuranceDetails && (
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, mt: 2 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Detalles del Seguro
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Tipo:</strong> {selectedInsuranceDetails.tipo === 'medico' ? 'Médico' : 'Vida'}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Cobertura:</strong>{' '}
+                          {selectedInsuranceDetails.tipo === 'medico' 
+                            ? `${selectedInsuranceDetails.cobertura}% de gastos médicos`
+                            : `$${selectedInsuranceDetails.cobertura} en caso de fallecimiento`}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Beneficios:</strong>
+                        </Typography>
+                        <List>
+                          {selectedInsuranceDetails.beneficios.split(',').map((beneficio, index) => (
+                            <ListItem key={index}>
+                              <ListItemIcon>
+                                <CheckCircleIcon color="success" />
+                              </ListItemIcon>
+                              <ListItemText primary={beneficio.trim()} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle1">
+                          <strong>Requisitos:</strong>
+                        </Typography>
+                        <List>
+                          {selectedInsuranceDetails.requisitos.split(',').map((requisito, index) => (
+                            <ListItem key={index}>
+                              <ListItemIcon>
+                                <InfoIcon color="info" />
+                              </ListItemIcon>
+                              <ListItemText primary={requisito.trim()} />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                </Grid>
+              )}
+
+              {/* Documentos y Beneficiarios (solo visible cuando se está editando un contrato) */}
+        {selectedContract && (
+          <>
                     <Grid item xs={12}>
                       <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                         Documentos del Cliente
@@ -981,84 +1606,144 @@ const ContractManagement = () => {
                     </Grid>
 
                     {/* Historia Médica */}
-                    <Grid item xs={12}>
-                      <Paper sx={{ p: 2 }}>
-                        <Typography variant="h6" gutterBottom>
-                          Historia Médica
-                        </Typography>
-                        {selectedContract.historia_medica_path ? (
-                          <Box>
-                            <Typography variant="body2" color="textSecondary">
-                              Archivo subido: {selectedContract.historia_medica_path.split('/').pop()}
-                            </Typography>
-                            <Button
-                              variant="contained"
-                              color="primary"
-                              onClick={() => handleDownloadHistoriaMedica(selectedContract.id)}
-                              startIcon={<DownloadIcon />}
-                              sx={{ mt: 1 }}
-                            >
-                              Descargar Historia Médica
-                            </Button>
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color="textSecondary">
-                            No se ha subido historia médica
-                          </Typography>
-                        )}
-                      </Paper>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                        Historia Médica
+                </Typography>
+                      {selectedContract.historia_medica_path ? (
+                        <Box>
+                          <Alert severity="success" sx={{ mb: 2 }}>
+                            Historia médica subida correctamente
+                          </Alert>
+                          <Button
+                            variant="outlined"
+                            onClick={() => handleViewMedicalHistory(selectedContract.id)}
+                            startIcon={<VisibilityIcon />}
+                          >
+                            Ver Historia Médica
+                          </Button>
+                        </Box>
+                      ) : (
+                        <Alert severity="warning">
+                          No se ha subido historia médica
+                        </Alert>
+                      )}
+                    </Paper>
+                  </Grid>
+
+                  {/* Documentos Personales */}
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2 }}>
+                      <Typography variant="subtitle1" gutterBottom>
+                        Documentos Personales
+                      </Typography>
+                      {selectedContract.documentos_cliente_path ? (
+                        <Box>
+                          <Alert severity="success" sx={{ mb: 2 }}>
+                            Documentos personales subidos correctamente
+                          </Alert>
+                          <Button
+                            variant="outlined"
+                            onClick={() => handleViewClientDocuments(selectedContract.id)}
+                            startIcon={<VisibilityIcon />}
+                          >
+                            Ver Documentos Personales
+                          </Button>
+                        </Box>
+                      ) : (
+                        <Alert severity="warning">
+                          No se han subido documentos personales
+                        </Alert>
+                      )}
+                    </Paper>
                     </Grid>
 
                     {/* Beneficiarios */}
                     <Grid item xs={12}>
-                      <Typography variant="h6" gutterBottom>
+                      <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                         Beneficiarios
                       </Typography>
-                      {processBeneficiaries(selectedContract.beneficiarios).map((beneficiary, index) => (
-                        <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid #ddd', borderRadius: 1 }}>
-                          <Typography><strong>Nombre:</strong> {beneficiary.nombre}</Typography>
-                          <Typography><strong>Parentesco:</strong> {beneficiary.parentesco}</Typography>
-                          <Typography><strong>Fecha de Nacimiento:</strong> {beneficiary.fecha_nacimiento}</Typography>
-                        </Box>
-                      ))}
+                      {selectedContract.beneficiarios && selectedContract.beneficiarios.length > 0 ? (
+                        <List>
+                          {selectedContract.beneficiarios.map((beneficiario, index) => {
+                            // Verificar si existe un documento para este beneficiario
+                            const tieneDocumento = selectedContract.documentos_beneficiarios && 
+                              selectedContract.documentos_beneficiarios[index] !== undefined;
+                            return (
+                              <Paper key={index} sx={{ p: 2, mb: 2 }}>
+                                <ListItem>
+                                  <ListItemText
+                                    primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
+                                    secondary={
+                                      <>
+                                        <Typography component="span" variant="body2">
+                                          Parentesco: {beneficiario.parentesco}
+                                        </Typography>
+                                        <br />
+                                        <Typography component="span" variant="body2">
+                                          Fecha de Nacimiento: {new Date(beneficiario.fecha_nacimiento).toLocaleDateString()}
+                                        </Typography>
+                                      </>
+                                    }
+                                  />
+                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                    {tieneDocumento ? (
+                                      <Button
+                                        variant="outlined"
+                                        onClick={() => handleViewBeneficiaryDocuments(selectedContract.id, index)}
+                                        startIcon={<VisibilityIcon />}
+                                        disabled={loading}
+                                      >
+                                        {loading ? 'Cargando...' : 'Ver Documentos'}
+                                      </Button>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Sin documentos
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </ListItem>
+                              </Paper>
+                            );
+                          })}
+                        </List>
+                      ) : (
+                        <Alert severity="warning">
+                          No se han registrado beneficiarios
+                        </Alert>
+                      )}
                     </Grid>
 
                     {/* Firma */}
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                         Firma del Cliente
-                      </Typography>
+                </Typography>
                       {selectedContract.firma_cliente ? (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <Alert severity="success">
+                      <Box>
+                        <Alert severity="success" sx={{ mb: 2 }}>
                             Contrato firmado correctamente
                           </Alert>
-                          <Box
-                            component="img"
-                            src={selectedContract.firma_cliente}
-                            alt="Firma del cliente"
-                            sx={{
-                              maxWidth: '100%',
-                              height: 'auto',
-                              border: '1px solid #ccc',
-                              borderRadius: '4px',
-                              backgroundColor: '#fff'
-                            }}
-                          />
+                        <Button
+                          variant="outlined"
+                          onClick={() => handleViewSignature(selectedContract.id)}
+                          startIcon={<VisibilityIcon />}
+                        >
+                          Ver Firma
+                        </Button>
                         </Box>
                       ) : (
                         <Alert severity="warning">
-                          Firma pendiente
+                        El contrato no ha sido firmado
                         </Alert>
                       )}
                     </Grid>
 
                     {/* Acciones de Aprobación */}
+                  {selectedContract.estado === 'pendiente' && (
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>
-                        Acciones
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                         <Button
                           variant="contained"
                           color="success"
@@ -1077,442 +1762,39 @@ const ContractManagement = () => {
                         </Button>
                       </Box>
                     </Grid>
-                  </>
-                )}
-
-                {/* Detalles del Seguro */}
-                {selectedInsuranceDetails && (
-                  <Grid item xs={12}>
-                    <Paper sx={{ p: 2, mt: 2 }}>
-                      <Typography variant="h6" gutterBottom>
-                        Detalles del Seguro
-                      </Typography>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle1">
-                            <strong>Tipo:</strong> {selectedInsuranceDetails.tipo === 'medico' ? 'Médico' : 'Vida'}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle1">
-                            <strong>Cobertura:</strong>{' '}
-                            {selectedInsuranceDetails.tipo === 'medico' 
-                              ? `${selectedInsuranceDetails.cobertura}% de gastos médicos`
-                              : `$${selectedInsuranceDetails.cobertura} en caso de fallecimiento`}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle1">
-                            <strong>Beneficios:</strong>
-                          </Typography>
-                          <List>
-                            {selectedInsuranceDetails.beneficios.split(',').map((beneficio, index) => (
-                              <ListItem key={index}>
-                                <ListItemIcon>
-                                  <CheckCircleIcon color="success" />
-                                </ListItemIcon>
-                                <ListItemText primary={beneficio.trim()} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Grid>
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle1">
-                            <strong>Requisitos:</strong>
-                          </Typography>
-                          <List>
-                            {selectedInsuranceDetails.requisitos.split(',').map((requisito, index) => (
-                              <ListItem key={index}>
-                                <ListItemIcon>
-                                  <InfoIcon color="info" />
-                                </ListItemIcon>
-                                <ListItemText primary={requisito.trim()} />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Grid>
-                      </Grid>
-                    </Paper>
-                  </Grid>
-                )}
-              </>
-            ) : (
-              // Vista para clientes
-              <>
-                {/* Información del contrato */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Información del Contrato
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Cliente"
-                    value={selectedContract?.nombre_cliente || ''}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Seguro"
-                    value={selectedContract?.nombre_seguro || ''}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Fecha de Inicio"
-                    value={selectedContract?.fecha_inicio ? new Date(selectedContract.fecha_inicio).toLocaleDateString() : ''}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Fecha de Fin"
-                    value={selectedContract?.fecha_fin ? new Date(selectedContract.fecha_fin).toLocaleDateString() : ''}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Monto de Prima"
-                    value={`$${selectedContract?.monto_prima || ''}`}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Estado"
-                    value={selectedContract?.estado || ''}
-                    disabled
-                  />
-                </Grid>
-
-                {/* Información de Pago */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                    Información de Pago
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Método de Pago"
-                    value={selectedContract?.forma_pago || ''}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Frecuencia de Pago"
-                    value={selectedContract?.frecuencia_pago || ''}
-                    disabled
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Monto por Pago"
-                    value={`$${selectedContract?.monto_pago || ''}`}
-                    disabled
-                  />
-                </Grid>
-
-                {/* Documentos Requeridos */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                    Documentos Requeridos
-                  </Typography>
-                </Grid>
-
-                {/* Historia Médica */}
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Historia Médica
-                    </Typography>
-                    {selectedContract ? (
-                      <>
-                        {userRole === 'cliente' && (
-                          <>
-                            {!selectedContract.tiene_historia_medica ? (
-                              <Box sx={{ mt: 2 }}>
-                                <input
-                                  accept=".pdf"
-                                  style={{ display: 'none' }}
-                                  id="historia-medica-upload"
-                                  type="file"
-                                  onChange={handleMedicalHistoryUpload}
-                                />
-                                <label htmlFor="historia-medica-upload">
-                                  <Button
-                                    variant="contained"
-                                    component="span"
-                                    startIcon={<AddIcon />}
-                                    disabled={loading}
-                                  >
-                                    Subir Historia Médica
-                                  </Button>
-                                </label>
-                                {medicalHistory && (
-                                  <Typography variant="body2" sx={{ mt: 1 }}>
-                                    Archivo seleccionado: {medicalHistory.name}
-                                  </Typography>
-                                )}
-                              </Box>
-                            ) : (
-                              <Box sx={{ mt: 2 }}>
-                                <Typography variant="body1" color="success.main">
-                                  Historia médica subida correctamente
-                                </Typography>
-                                <Button
-                                  variant="outlined"
-                                  onClick={handleViewMedicalHistory}
-                                  startIcon={<VisibilityIcon />}
-                                  sx={{ mt: 1 }}
-                                >
-                                  Ver Historia Médica
-                                </Button>
-                              </Box>
-                            )}
-                          </>
-                        )}
-                        {userRole === 'agente' && selectedContract.tiene_historia_medica && (
-                          <Button
-                            variant="outlined"
-                            onClick={handleViewMedicalHistory}
-                            startIcon={<VisibilityIcon />}
-                            sx={{ mt: 1 }}
-                          >
-                            Ver Historia Médica
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <Typography variant="body1" color="text.secondary">
-                        Seleccione un contrato para ver sus detalles
-                      </Typography>
-                    )}
-                  </Paper>
-                </Grid>
-
-                {/* Beneficiarios */}
-                <Grid item xs={12}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    Beneficiarios
-                  </Typography>
-                  {selectedContract?.beneficiarios?.length > 0 ? (
-                    <List>
-                      {selectedContract.beneficiarios.map((beneficiary, index) => (
-                        <ListItem key={index}>
-                          <ListItemText
-                            primary={beneficiary.nombre}
-                            secondary={`Parentesco: ${beneficiary.parentesco} - Fecha de Nacimiento: ${new Date(beneficiary.fecha_nacimiento).toLocaleDateString()}`}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  ) : (
-                    <>
-                      <Button
-                        variant="outlined"
-                        onClick={handleAddBeneficiary}
-                        sx={{ mb: 2 }}
-                      >
-                        Agregar Beneficiario
-                      </Button>
-                      <List>
-                        {beneficiaries.map((beneficiary, index) => (
-                          <ListItem key={index}>
-                            <Grid container spacing={2}>
-                              <Grid item xs={12} md={4}>
-                                <TextField
-                                  fullWidth
-                                  label="Nombre"
-                                  value={beneficiary.nombre}
-                                  onChange={(e) => handleBeneficiaryChange(index, 'nombre', e.target.value)}
-                                  required
-                                />
-                              </Grid>
-                              <Grid item xs={12} md={4}>
-                                <FormControl fullWidth>
-                                  <InputLabel>Parentesco</InputLabel>
-                                  <Select
-                                    value={beneficiary.parentesco}
-                                    onChange={(e) => handleBeneficiaryChange(index, 'parentesco', e.target.value)}
-                                    required
-                                  >
-                                    <MenuItem value="padre">Padre</MenuItem>
-                                    <MenuItem value="madre">Madre</MenuItem>
-                                    <MenuItem value="hermano">Hermano</MenuItem>
-                                    <MenuItem value="hermana">Hermana</MenuItem>
-                                    <MenuItem value="conyuge">Cónyuge</MenuItem>
-                                    <MenuItem value="otro">Otro</MenuItem>
-                                  </Select>
-                                </FormControl>
-                                {beneficiary.parentesco === 'otro' && (
-                                  <TextField
-                                    fullWidth
-                                    label="Especifique el parentesco"
-                                    value={beneficiary.parentesco_otro || ''}
-                                    onChange={(e) => handleBeneficiaryChange(index, 'parentesco_otro', e.target.value)}
-                                    required
-                                    sx={{ mt: 1 }}
-                                  />
-                                )}
-                              </Grid>
-                              <Grid item xs={12} md={4}>
-                                <TextField
-                                  fullWidth
-                                  type="date"
-                                  label="Fecha de Nacimiento"
-                                  value={beneficiary.fecha_nacimiento}
-                                  onChange={(e) => handleBeneficiaryChange(index, 'fecha_nacimiento', e.target.value)}
-                                  InputLabelProps={{ shrink: true }}
-                                  required
-                                />
-                              </Grid>
-                            </Grid>
-                          </ListItem>
-                        ))}
-                      </List>
-                    </>
                   )}
-                </Grid>
-
-                {/* Firma */}
-                <Grid item xs={12}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    Firma del Cliente
-                  </Typography>
-                  {selectedContract?.firma_cliente ? (
-                    <Alert severity="success">
-                      Contrato firmado correctamente
-                    </Alert>
-                  ) : (
-                    <>
-                      <Paper
-                        variant="outlined"
-                        sx={{
-                          width: '100%',
-                          height: '400px',
-                          mb: 2,
-                          position: 'relative',
-                          backgroundColor: '#fff',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: '100%',
-                            height: '100%',
-                            position: 'relative'
-                          }}
-                        >
-                          <SignaturePad
-                            ref={(ref) => setSignaturePad(ref)}
-                            canvasProps={{
-                              className: 'signature-canvas',
-                              style: {
-                                width: '100%',
-                                height: '100%',
-                                border: '1px solid #ccc',
-                                borderRadius: '4px'
-                              }
-                            }}
-                            onEnd={handleSignatureEnd}
-                          />
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              position: 'absolute',
-                              bottom: 8,
-                              left: 8,
-                              color: 'text.secondary',
-                              backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              zIndex: 1
-                            }}
-                          >
-                            Firma aquí
-                          </Typography>
-                        </Box>
-                      </Paper>
-                      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                        <Button
-                          variant="outlined"
-                          onClick={() => signaturePad?.clear()}
-                          startIcon={<DeleteIcon />}
-                        >
-                          Limpiar Firma
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          onClick={() => {
-                            if (signaturePad) {
-                              signaturePad.fromDataURL(signature);
-                            }
-                          }}
-                          startIcon={<RestoreIcon />}
-                          disabled={!signature}
-                        >
-                          Restaurar Firma
-                        </Button>
-                      </Box>
-                      {signature && (
-                        <Alert severity="success" sx={{ mt: 2 }}>
-                          Firma capturada correctamente
-                        </Alert>
-                      )}
-                    </>
-                  )}
-                </Grid>
-
-                {/* Botón de Rechazar para Agentes */}
-                {userRole === 'agente' && selectedContract?.estado === 'pendiente_revision' && (
-                  <Grid item xs={12} sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      onClick={() => handleApproveReject(selectedContract.id, 'rechazado')}
-                      disabled={loading}
-                    >
-                      Rechazar Contrato
-                    </Button>
-                  </Grid>
-                )}
-              </>
-            )}
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button
+                </>
+              )}
+            </Grid>
+          )}
+            </DialogContent>
+            <DialogActions>
+          <Button onClick={handleCloseDialog} color="secondary">
+            Cancelar
+          </Button>
+              <Button
             onClick={handleSubmit} 
-            variant="contained"
+                variant="contained"
             color="primary"
             disabled={loading}
-          >
-            {loading ? 'Procesando...' : 'Guardar'}
-          </Button>
-        </DialogActions>
+              >
+            {selectedContract ? 'Actualizar Contrato' : 'Crear Contrato'}
+              </Button>
+            </DialogActions>
       </Dialog>
 
       <Snackbar
-        open={!!success}
+        open={snackbar.open}
         autoHideDuration={6000}
-        onClose={() => setSuccess('')}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert severity="success" onClose={() => setSuccess('')}>
-          {success}
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
         </Alert>
       </Snackbar>
     </Container>
