@@ -161,21 +161,11 @@ const Layout = ({ children }) => {
             text: 'Reembolsos',
             icon: <PaymentIcon />,
             path: '/agent/reimbursements'
-          },
-          {
-            text: 'Reportes',
-            icon: <AssignmentIcon />,
-            path: '/agent/reports'
           }
         );
         break;
       case 'cliente':
         items.push(
-          {
-            text: 'Mis Seguros',
-            icon: <SecurityIcon />,
-            path: '/client/insurances'
-          },
           {
             text: 'Mis Contratos',
             icon: <DescriptionIcon />,

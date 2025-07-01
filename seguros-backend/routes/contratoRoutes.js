@@ -44,12 +44,13 @@ const upload = multer({
 router.get('/', verifyToken, verifyAgentOrAdmin, getContratos);
 router.get('/cliente/:clienteId', verifyToken, verifyAgentOrAdmin, getContratosByCliente);
 router.get('/agente/:agenteId', verifyToken, verifyAgentOrAdmin, getContratosByAgente);
-router.post('/', verifyToken, verifyAgentOrAdmin, createContrato);
+router.post('/', verifyToken, verifyClienteOrAgentOrAdmin, createContrato);
 router.put('/:id/estado', verifyToken, verifyAgentOrAdmin, actualizarEstadoContrato);
 
 // Rutas para documentos
 router.put('/:id/documentos', 
     verifyToken, 
+    verifyClienteOrAgentOrAdmin,
     upload.fields([
         { name: 'historia_medica', maxCount: 1 },
         { name: 'documentos_cliente', maxCount: 1 },

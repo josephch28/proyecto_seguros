@@ -31,6 +31,7 @@ const PaymentManagement = () => {
   });
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [loadingPay, setLoadingPay] = useState(false);
 
   useEffect(() => {
     fetchPayments();
@@ -68,6 +69,27 @@ const PaymentManagement = () => {
 
   const handleCloseDetails = () => {
     setDetailsOpen(false);
+  };
+
+  const handlePay = async (payment) => {
+    setLoadingPay(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:3001/api/pagos/${payment.id}/registrar`, {
+        monto: payment.monto,
+        fecha_pago: new Date().toISOString().split('T')[0],
+        comprobante: 'Pago realizado por el cliente'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchPayments();
+      fetchSummary();
+      setDetailsOpen(false);
+    } catch (error) {
+      alert('Error al realizar el pago');
+    } finally {
+      setLoadingPay(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -167,6 +189,18 @@ const PaymentManagement = () => {
                   >
                     Ver Detalles
                   </Button>
+                  {payment.estado === 'pendiente' && (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="small"
+                      sx={{ ml: 1 }}
+                      onClick={() => handlePay(payment)}
+                      disabled={loadingPay}
+                    >
+                      {loadingPay ? 'Procesando...' : 'Realizar Pago'}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -207,6 +241,16 @@ const PaymentManagement = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDetails}>Cerrar</Button>
+              {selectedPayment && selectedPayment.estado === 'pendiente' && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => handlePay(selectedPayment)}
+                  disabled={loadingPay}
+                >
+                  {loadingPay ? 'Procesando...' : 'Realizar Pago'}
+                </Button>
+              )}
             </DialogActions>
           </>
         )}

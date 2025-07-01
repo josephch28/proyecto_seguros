@@ -56,7 +56,6 @@ const ContractManagement = () => {
   const [signaturePad, setSignaturePad] = useState(null);
   const [medicalHistory, setMedicalHistory] = useState(null);
   const [clientDocuments, setClientDocuments] = useState(null);
-  const [beneficiaryDocuments, setBeneficiaryDocuments] = useState({});
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [userRole, setUserRole] = useState('');
   const [formData, setFormData] = useState({
@@ -74,7 +73,6 @@ const ContractManagement = () => {
     tipo_cuenta: ''
   });
   const [signature, setSignature] = useState(null);
-  const [userId, setUserId] = useState(null);
   const [selectedInsuranceDetails, setSelectedInsuranceDetails] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -82,9 +80,9 @@ const ContractManagement = () => {
     severity: 'success'
   });
   const navigate = useNavigate();
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
-    // Obtener el rol del usuario del token
     const token = localStorage.getItem('token');
     if (token) {
       const decodedToken = JSON.parse(atob(token.split('.')[1]));
@@ -231,21 +229,6 @@ const ContractManagement = () => {
       // Cargar beneficiarios
       setBeneficiaries(beneficiariosProcesados);
 
-      // Cargar documentos si existen
-      if (contract.documentos_beneficiarios) {
-        try {
-          const documentosProcesados = typeof contract.documentos_beneficiarios === 'string'
-            ? JSON.parse(contract.documentos_beneficiarios)
-            : contract.documentos_beneficiarios;
-          setBeneficiaryDocuments(documentosProcesados);
-        } catch (error) {
-          console.error('Error al procesar documentos de beneficiarios:', error);
-          setBeneficiaryDocuments({});
-        }
-      } else {
-        setBeneficiaryDocuments({});
-      }
-
       // Cargar detalles del seguro
       if (contract.seguro_id) {
         const selectedInsurance = insurances.find(i => i.id === contract.seguro_id);
@@ -292,7 +275,6 @@ const ContractManagement = () => {
         tipo_cuenta: ''
       });
       setBeneficiaries([]);
-      setBeneficiaryDocuments({});
       setSelectedInsuranceDetails(null);
       setSignature(null);
       if (signaturePad) {
@@ -394,55 +376,6 @@ const ContractManagement = () => {
     }));
   };
 
-  const handleFileUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Verificar que tenemos un contrato seleccionado
-      if (!selectedContract || !selectedContract.id) {
-        setError('No hay un contrato seleccionado');
-        return;
-      }
-
-      const formData = new FormData();
-      for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
-      }
-
-      console.log('Subiendo archivos para el contrato:', selectedContract.id);
-      
-      const response = await axios.post(
-        `${API_URL}/contratos/${selectedContract.id}/documentos`,
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
-
-      console.log('Respuesta del servidor:', response.data);
-
-      if (response.data.success) {
-        setSuccess(response.data.message || 'Archivos subidos exitosamente');
-        // Actualizar la lista de contratos
-        fetchContracts();
-      } else {
-        setError(response.data.message || 'Error al subir los archivos');
-      }
-    } catch (error) {
-      console.error('Error al subir archivos:', error);
-      setError(error.response?.data?.message || 'Error al subir los archivos');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -472,13 +405,19 @@ const ContractManagement = () => {
       };
 
       let response;
-      if (selectedContract) {
-        console.log('Actualizando contrato:', selectedContract.id);
-        response = await axios.put(
-          `${API_URL}/contratos/${selectedContract.id}`,
-          formData,
-          config
-        );
+      if (userRole === 'cliente') {
+        const data = new FormData();
+        data.append('cliente_id', userId);
+        Object.entries(formData).forEach(([key, value]) => {
+          if (key !== 'cliente_id') data.append(key, value);
+        });
+        if (medicalHistory) data.append('historia_medica', medicalHistory);
+        if (clientDocuments) data.append('documentos_cliente', clientDocuments);
+        if (beneficiaries.length > 0) data.append('beneficiarios', JSON.stringify(beneficiaries));
+        if (signature) data.append('firma_cliente', signature);
+        response = await axios.post(`${API_URL}/contratos`, data, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+        });
       } else {
         console.log('Creando nuevo contrato');
         response = await axios.post(
@@ -619,75 +558,6 @@ const ContractManagement = () => {
     }
   };
 
-  const handleDownloadHistoriaMedica = async (contratoId) => {
-    try {
-      setLoading(true);
-      console.log('Iniciando descarga de historia médica para contrato:', contratoId);
-      
-      // Obtener la ruta del archivo del contrato actual
-      const contrato = selectedContract;
-      if (!contrato || !contrato.historia_medica_path) {
-        throw new Error('No hay archivo de historia médica disponible');
-      }
-
-      console.log('Ruta del archivo:', contrato.historia_medica_path);
-      
-      const response = await axios.get(
-        `${API_URL}/contratos/${contratoId}/documentos/historia-medica`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          },
-          responseType: 'blob'
-        }
-      );
-
-      console.log('Archivo recibido, creando blob...');
-      
-      // Crear un blob con la respuesta
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      
-      // Crear un enlace temporal y hacer clic en él
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = contrato.historia_medica_path.split('/').pop() || `historia-medica-${contratoId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      
-      // Limpiar
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      console.log('Descarga completada exitosamente');
-    } catch (error) {
-      console.error('Error al descargar historia médica:', error);
-      if (error.response) {
-        console.error('Detalles del error:', {
-          status: error.response.status,
-          data: error.response.data
-        });
-      }
-      setError('Error al descargar la historia médica: ' + (error.message || 'Error desconocido'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const canApproveContract = (contrato) => {
-    // Verificación básica de estado y rol
-    if (contrato.estado !== 'pendiente_revision' || userRole !== 'agente') {
-      return false;
-    }
-
-    // Verificación simple de documentos requeridos
-    return Boolean(
-      contrato.historia_medica_path && 
-      contrato.firma_cliente && 
-      contrato.beneficiarios?.length > 0
-    );
-  };
-
   const handleInsuranceChange = async (e) => {
     const seguroId = e.target.value;
     setFormData(prev => ({ ...prev, seguro_id: seguroId }));
@@ -731,41 +601,6 @@ const ContractManagement = () => {
         severity: 'success'
       });
     }
-  };
-
-  // Función para manejar la subida de documentos de beneficiarios
-  const handleBeneficiaryDocumentsChange = (index, e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        setSnackbar({
-          open: true,
-          message: 'Los documentos del beneficiario deben ser un archivo PDF',
-          severity: 'error'
-        });
-        return;
-      }
-      setBeneficiaryDocuments(prev => ({
-        ...prev,
-        [index]: file
-      }));
-      setSnackbar({
-        open: true,
-        message: 'Archivo seleccionado: ' + file.name,
-        severity: 'success'
-      });
-    }
-  };
-
-  // Función para eliminar un beneficiario
-  const handleRemoveBeneficiario = (index) => {
-    setBeneficiaries(prev => prev.filter((_, i) => i !== index));
-    // También eliminar el documento asociado si existe
-    setBeneficiaryDocuments(prev => {
-      const newDocs = { ...prev };
-      delete newDocs[index];
-      return newDocs;
-    });
   };
 
   const handleCloseSnackbar = () => {
@@ -1259,56 +1094,43 @@ const ContractManagement = () => {
                 <Typography variant="subtitle1" gutterBottom>
                   Beneficiarios
                 </Typography>
-                {selectedContract.beneficiarios && selectedContract.beneficiarios.length > 0 ? (
-                    <List>
-                    {selectedContract.beneficiarios.map((beneficiario, index) => {
-                      // Verificar si existe un documento para este beneficiario
-                      const tieneDocumento = selectedContract.documentos_beneficiarios && 
-                                           selectedContract.documentos_beneficiarios[index] !== undefined;
-                      
-                      return (
-                        <Paper key={index} sx={{ p: 2, mb: 2 }}>
-                          <ListItem>
-                            <ListItemText
-                              primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
-                              secondary={
-                                <>
-                                  <Typography component="span" variant="body2">
-                                    Parentesco: {beneficiario.parentesco}
-                                  </Typography>
-                                  <br />
-                                  <Typography component="span" variant="body2">
-                                    Fecha de Nacimiento: {new Date(beneficiario.fecha_nacimiento).toLocaleDateString()}
-                                  </Typography>
-                                </>
-                              }
-                            />
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              {tieneDocumento ? (
-                                <Button
-                                  variant="outlined"
-                                  onClick={() => handleViewBeneficiaryDocuments(selectedContract.id, index)}
-                                  startIcon={<VisibilityIcon />}
-                                  disabled={loading}
-                                >
-                                  {loading ? 'Cargando...' : 'Ver Documentos'}
-                                </Button>
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  Sin documentos
-                                </Typography>
-                              )}
-                            </Box>
-                          </ListItem>
-                        </Paper>
-                      );
-                    })}
-                    </List>
-                  ) : (
-                    <Alert severity="warning">
-                      No se han registrado beneficiarios
-                    </Alert>
-                  )}
+                <List>
+                  {beneficiaries.map((beneficiario, index) => (
+                    <ListItem key={index}>
+                      <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            fullWidth
+                            label="Nombre"
+                            value={beneficiario.nombre}
+                            onChange={e => handleBeneficiaryChange(index, 'nombre', e.target.value)}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            fullWidth
+                            label="Parentesco"
+                            value={beneficiario.parentesco}
+                            onChange={e => handleBeneficiaryChange(index, 'parentesco', e.target.value)}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            fullWidth
+                            type="date"
+                            label="Fecha de Nacimiento"
+                            value={beneficiario.fecha_nacimiento}
+                            onChange={e => handleBeneficiaryChange(index, 'fecha_nacimiento', e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </ListItem>
+                  ))}
+                </List>
+                <Button variant="outlined" onClick={handleAddBeneficiary} sx={{ mt: 2 }}>
+                  Agregar Beneficiario
+                </Button>
               </Grid>
 
               {/* Sección de firma */}
@@ -1664,9 +1486,9 @@ const ContractManagement = () => {
                       <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                         Beneficiarios
                       </Typography>
-                      {selectedContract.beneficiarios && selectedContract.beneficiarios.length > 0 ? (
+                      {Array.isArray(selectedContract?.beneficiarios) && selectedContract.beneficiarios.length > 0 ? (
                         <List>
-                          {selectedContract.beneficiarios.map((beneficiario, index) => {
+                          {(selectedContract?.beneficiarios || []).map((beneficiario, index) => {
                             // Verificar si existe un documento para este beneficiario
                             const tieneDocumento = selectedContract.documentos_beneficiarios && 
                               selectedContract.documentos_beneficiarios[index] !== undefined;
