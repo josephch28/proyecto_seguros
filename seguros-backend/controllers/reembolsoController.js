@@ -85,15 +85,18 @@ const reembolsoController = {
 
   async verComprobante(req, res) {
     try {
+      console.log('===> verComprobante llamado para id:', req.params.id);
       const { id } = req.params;
       const reembolso = await Reembolso.obtenerPorId(id);
       if (!reembolso || !reembolso.archivo_comprobante) {
+        console.log('Comprobante no encontrado para id:', id);
         return res.status(404).json({ message: 'Comprobante no encontrado' });
       }
       const fileBuffer = await fileStorageService.getFile(reembolso.archivo_comprobante);
       res.setHeader('Content-Type', 'application/pdf');
       res.send(fileBuffer);
     } catch (err) {
+      console.error('Error al obtener comprobante:', err);
       res.status(500).json({ message: 'Error al obtener comprobante', error: err.message });
     }
   },
