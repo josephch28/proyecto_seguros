@@ -19,6 +19,18 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Middleware CORS manual para permitir PATCH
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -28,6 +40,8 @@ app.use('/api/contratos', require('./routes/contratoRoutes'));
 app.use('/api/seguros', require('./routes/seguroRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/agent', require('./routes/agentRoutes'));
+console.log('Registrando rutas de reembolsos...');
+app.use('/api/reembolsos', require('./routes/reembolsoRoutes'));
 
 // Manejo de errores
 app.use((err, req, res, next) => {

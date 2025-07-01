@@ -28,6 +28,8 @@ const PaymentManagement = () => {
     totalPaid: 0,
     pendingPayments: 0,
     nextPaymentDate: null,
+    nextPaymentAmount: null,
+    nextPaymentInsurance: null,
   });
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -40,7 +42,7 @@ const PaymentManagement = () => {
   const fetchPayments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3001/api/client/payments', {
+      const response = await axios.get('http://localhost:3001/api/pagos/cliente', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPayments(response.data);
@@ -52,7 +54,7 @@ const PaymentManagement = () => {
   const fetchSummary = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3001/api/client/payments/summary', {
+      const response = await axios.get('http://localhost:3001/api/pagos/cliente/resumen', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSummary(response.data);
@@ -126,6 +128,11 @@ const PaymentManagement = () => {
               <Typography variant="h4">
                 {summary.nextPaymentDate ? new Date(summary.nextPaymentDate).toLocaleDateString() : 'N/A'}
               </Typography>
+              {summary.nextPaymentAmount && (
+                <Typography variant="body2" color="text.secondary">
+                  ${summary.nextPaymentAmount} - {summary.nextPaymentInsurance}
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -146,10 +153,12 @@ const PaymentManagement = () => {
           <TableBody>
             {payments.map((payment) => (
               <TableRow key={payment.id}>
-                <TableCell>{new Date(payment.fecha).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  {payment.fecha_pago ? new Date(payment.fecha_pago).toLocaleDateString() : 'Pendiente'}
+                </TableCell>
                 <TableCell>${payment.monto}</TableCell>
-                <TableCell>{payment.seguro}</TableCell>
-                <TableCell>{payment.metodo_pago}</TableCell>
+                <TableCell>{payment.nombre_seguro}</TableCell>
+                <TableCell>{payment.metodo_pago || 'No especificado'}</TableCell>
                 <TableCell>
                   <Chip
                     label={payment.estado}
@@ -183,25 +192,28 @@ const PaymentManagement = () => {
             <DialogContent dividers>
               <Box sx={{ p: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>ID de Transacción:</strong> {selectedPayment.id_transaccion}
+                  <strong>ID de Pago:</strong> {selectedPayment.id}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Fecha:</strong> {new Date(selectedPayment.fecha).toLocaleDateString()}
+                  <strong>Fecha:</strong> {selectedPayment.fecha_pago ? new Date(selectedPayment.fecha_pago).toLocaleDateString() : 'Pendiente'}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                   <strong>Monto:</strong> ${selectedPayment.monto}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Seguro:</strong> {selectedPayment.seguro}
+                  <strong>Seguro:</strong> {selectedPayment.nombre_seguro}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Método de Pago:</strong> {selectedPayment.metodo_pago}
+                  <strong>Método de Pago:</strong> {selectedPayment.metodo_pago || 'No especificado'}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                   <strong>Estado:</strong> {selectedPayment.estado}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Notas:</strong> {selectedPayment.notas || 'Sin notas adicionales'}
+                  <strong>Referencia:</strong> {selectedPayment.referencia_pago || 'Sin referencia'}
+                </Typography>
+                <Typography variant="subtitle1" gutterBottom>
+                  <strong>Frecuencia de Pago:</strong> {selectedPayment.frecuencia_pago}
                 </Typography>
               </Box>
             </DialogContent>

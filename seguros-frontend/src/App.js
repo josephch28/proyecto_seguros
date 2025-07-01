@@ -365,6 +365,14 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/agent/reimbursements"
+            element={
+              <PrivateRoute allowedRoles={['agente', 'asesor']}>
+                <ReimbursementManagement />
+              </PrivateRoute>
+            }
+          />
 
           {/* Rutas comunes */}
           <Route

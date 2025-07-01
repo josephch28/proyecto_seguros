@@ -3,6 +3,8 @@ const router = express.Router();
 const { 
   getPagos, 
   getPagosByContrato, 
+  getPagosByCliente,
+  getResumenPagosCliente,
   registrarPago,
   simularPagoAutomatico 
 } = require('../controllers/pagoController');
@@ -16,6 +18,12 @@ router.get('/', getPagos);
 
 // Obtener pagos por contrato
 router.get('/contrato/:contratoId', getPagosByContrato);
+
+// Obtener pagos del cliente autenticado
+router.get('/cliente', getPagosByCliente);
+
+// Obtener resumen de pagos del cliente autenticado
+router.get('/cliente/resumen', getResumenPagosCliente);
 
 // Registrar pago
 router.post('/:pagoId/registrar', registrarPago);

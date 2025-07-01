@@ -309,7 +309,9 @@ const ContractManagement = () => {
     const newBeneficiaries = [...beneficiaries];
     newBeneficiaries[index] = {
       ...newBeneficiaries[index],
-      [field]: value
+      [field]: value,
+      // Si el parentesco no es "otro", limpiar parentesco_otro
+      ...(field === 'parentesco' && value !== 'otro' && { parentesco_otro: null })
     };
     setBeneficiaries(newBeneficiaries);
     setFormData(prev => ({
@@ -343,7 +345,12 @@ const ContractManagement = () => {
         
         // Agregar beneficiarios
         if (beneficiaries.length > 0) {
-          formData.append('beneficiarios', JSON.stringify(beneficiaries));
+          // Procesar beneficiarios para enviar el parentesco correcto
+          const beneficiariosProcesados = beneficiaries.map(beneficiary => ({
+            ...beneficiary,
+            parentesco: beneficiary.parentesco === 'otro' ? beneficiary.parentesco_otro : beneficiary.parentesco
+          }));
+          formData.append('beneficiarios', JSON.stringify(beneficiariosProcesados));
         }
         
         // Agregar firma
@@ -1007,11 +1014,11 @@ const ContractManagement = () => {
                       <Typography variant="h6" gutterBottom>
                         Beneficiarios
                       </Typography>
-                      {processBeneficiaries(selectedContract.beneficiarios).map((beneficiario, index) => (
+                      {processBeneficiaries(selectedContract.beneficiarios).map((beneficiary, index) => (
                         <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid #ddd', borderRadius: 1 }}>
-                          <Typography><strong>Nombre:</strong> {beneficiario.nombre}</Typography>
-                          <Typography><strong>Parentesco:</strong> {beneficiario.parentesco}</Typography>
-                          <Typography><strong>Fecha de Nacimiento:</strong> {beneficiario.fecha_nacimiento}</Typography>
+                          <Typography><strong>Nombre:</strong> {beneficiary.nombre}</Typography>
+                          <Typography><strong>Parentesco:</strong> {beneficiary.parentesco}</Typography>
+                          <Typography><strong>Fecha de Nacimiento:</strong> {beneficiary.fecha_nacimiento}</Typography>
                         </Box>
                       ))}
                     </Grid>
@@ -1335,13 +1342,31 @@ const ContractManagement = () => {
                                 />
                               </Grid>
                               <Grid item xs={12} md={4}>
-                                <TextField
-                                  fullWidth
-                                  label="Parentesco"
-                                  value={beneficiary.parentesco}
-                                  onChange={(e) => handleBeneficiaryChange(index, 'parentesco', e.target.value)}
-                                  required
-                                />
+                                <FormControl fullWidth>
+                                  <InputLabel>Parentesco</InputLabel>
+                                  <Select
+                                    value={beneficiary.parentesco}
+                                    onChange={(e) => handleBeneficiaryChange(index, 'parentesco', e.target.value)}
+                                    required
+                                  >
+                                    <MenuItem value="padre">Padre</MenuItem>
+                                    <MenuItem value="madre">Madre</MenuItem>
+                                    <MenuItem value="hermano">Hermano</MenuItem>
+                                    <MenuItem value="hermana">Hermana</MenuItem>
+                                    <MenuItem value="conyuge">Cónyuge</MenuItem>
+                                    <MenuItem value="otro">Otro</MenuItem>
+                                  </Select>
+                                </FormControl>
+                                {beneficiary.parentesco === 'otro' && (
+                                  <TextField
+                                    fullWidth
+                                    label="Especifique el parentesco"
+                                    value={beneficiary.parentesco_otro || ''}
+                                    onChange={(e) => handleBeneficiaryChange(index, 'parentesco_otro', e.target.value)}
+                                    required
+                                    sx={{ mt: 1 }}
+                                  />
+                                )}
                               </Grid>
                               <Grid item xs={12} md={4}>
                                 <TextField

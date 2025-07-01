@@ -323,14 +323,18 @@ const actualizarEstadoContrato = async (req, res) => {
 
         const contrato = contratos[0];
 
-        // Solo actualizar el estado
-        const [result] = await pool.query(
-            `UPDATE contratos 
-            SET estado = ?,
-                updated_at = NOW()
-            WHERE id = ?`,
-            [estado, id]
-        );
+        // Si el estado es rechazado, limpiar los documentos
+        let query = `UPDATE contratos SET estado = ?, updated_at = NOW()`;
+        let values = [estado];
+
+        if (estado === 'rechazado') {
+            query += `, historia_medica = NULL, beneficiarios = NULL, firma_cliente = NULL, historia_medica_path = NULL`;
+        }
+
+        query += ` WHERE id = ?`;
+        values.push(id);
+
+        const [result] = await pool.query(query, values);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({
@@ -663,11 +667,11 @@ const updateContratoDocumentos = async (req, res) => {
             });
 
             try {
-                const filePath = await fileStorageService.saveFile(req.file, id);
+                const result = await fileStorageService.uploadFile(req.file, `historia-medica/${id}`);
                 updates.push('historia_medica_path = ?');
-                values.push(filePath);
+                values.push(result.filePath);
                 console.log('Archivo guardado correctamente:', {
-                    path: filePath,
+                    path: result.filePath,
                     size: req.file.size
                 });
             } catch (error) {
@@ -681,9 +685,9 @@ const updateContratoDocumentos = async (req, res) => {
 
         // Manejar beneficiarios
         if (beneficiarios) {
-                    updates.push('beneficiarios = ?');
+            updates.push('beneficiarios = ?');
             values.push(JSON.stringify(beneficiarios));
-                }
+        }
 
         // Manejar firma del cliente
         if (firma_cliente) {
@@ -694,21 +698,21 @@ const updateContratoDocumentos = async (req, res) => {
         // Actualizar el contrato
         if (updates.length > 0) {
             const query = `UPDATE contratos SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`;
-        values.push(id);
+            values.push(id);
 
             console.log('Ejecutando query:', query);
             console.log('Valores:', values);
 
             const [result] = await pool.query(query, values);
 
-        if (result.affectedRows === 0) {
+            if (result.affectedRows === 0) {
                 return res.status(400).json({
-                success: false,
-                message: 'Error al actualizar el contrato'
-            });
-        }
+                    success: false,
+                    message: 'Error al actualizar el contrato'
+                });
+            }
 
-        // Obtener el contrato actualizado
+            // Obtener el contrato actualizado
             const [contratosActualizados] = await pool.query(
                 'SELECT * FROM contratos WHERE id = ?',
                 [id]
@@ -724,9 +728,9 @@ const updateContratoDocumentos = async (req, res) => {
                 tiene_firma: !!contratoActualizado.firma_cliente
             });
 
-        res.json({
-            success: true,
-            message: 'Documentos actualizados correctamente',
+            res.json({
+                success: true,
+                message: 'Documentos actualizados correctamente',
                 data: {
                     estado: contratoActualizado.estado,
                     tiene_historia_medica: !!contratoActualizado.historia_medica_path,
@@ -738,7 +742,7 @@ const updateContratoDocumentos = async (req, res) => {
             res.json({
                 success: true,
                 message: 'No hay cambios para actualizar'
-        });
+            });
         }
     } catch (error) {
         console.error('Error en updateContratoDocumentos:', error);
@@ -812,7 +816,7 @@ const obtenerHistoriaMedica = async (req, res) => {
             console.log('Archivo obtenido correctamente, tamaño:', fileBuffer.length);
             
             // Configurar headers para la respuesta
-        res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `inline; filename="historia_medica_${id}.pdf"`);
             res.setHeader('Content-Length', fileBuffer.length);
             res.setHeader('Cache-Control', 'no-cache');
@@ -823,7 +827,7 @@ const obtenerHistoriaMedica = async (req, res) => {
             // Enviar el archivo
             res.send(fileBuffer);
             console.log('Archivo enviado correctamente');
-    } catch (error) {
+        } catch (error) {
             console.error('Error al leer el archivo:', error);
             return res.status(404).json({
                 success: false,
@@ -914,11 +918,11 @@ const getContratoById = async (req, res) => {
 
         if (contratos.length === 0) {
             console.log('Contrato no encontrado');
-                return res.status(404).json({
-                    success: false,
+            return res.status(404).json({
+                success: false,
                 message: 'Contrato no encontrado'
-                });
-            }
+            });
+        }
 
         const contrato = contratos[0];
         console.log('Contrato encontrado:', {
@@ -934,10 +938,10 @@ const getContratoById = async (req, res) => {
         if (userRole === 'cliente' && contrato.cliente_id !== userId) {
             console.log('Acceso denegado: cliente intentando acceder a contrato de otro cliente');
             return res.status(403).json({
-                    success: false,
+                success: false,
                 message: 'No tienes permiso para ver este contrato'
-                });
-            }
+            });
+        }
 
         // Verificar si existe el archivo de historia médica
         let tieneHistoriaMedica = false;
@@ -963,7 +967,7 @@ const getContratoById = async (req, res) => {
                     // Si el archivo existe, mantener la ruta relativa
                     contrato.historia_medica_path = relativePath;
                 }
-                } catch (error) {
+            } catch (error) {
                 console.error('Error al verificar archivo:', error);
                 tieneHistoriaMedica = false;
             }
@@ -1005,10 +1009,10 @@ const getContratoById = async (req, res) => {
             beneficiarios: beneficiarios
         });
 
-            res.json({
-                success: true,
+        res.json({
+            success: true,
             data: response
-            });
+        });
     } catch (error) {
         console.error('Error en getContratoById:', error);
         res.status(500).json({

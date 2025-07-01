@@ -1,9 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
-// Configuración
-const UPLOAD_DIR = path.join(__dirname, '../uploads');
+// Calcula la raíz del proyecto (dos niveles arriba desde este archivo)
+const PROJECT_ROOT = path.resolve(__dirname, '../../');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+console.log('UPLOAD_DIR usado:', UPLOAD_DIR);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = ['application/pdf'];
 
@@ -65,8 +68,9 @@ const uploadFile = async (file, subfolder = '') => {
         const filePath = path.join(folderPath, fileName);
         const relativePath = normalizePath(path.join(subfolder, fileName));
 
-        console.log('Guardando archivo en:', filePath);
+        console.log('Intentando guardar archivo en:', filePath);
         await fs.writeFile(filePath, file.buffer);
+        console.log('Archivo guardado en:', filePath);
 
         // Verificar que el archivo se escribió correctamente
         try {
@@ -314,4 +318,9 @@ class FileStorageService {
     }
 }
 
-module.exports = new FileStorageService(); 
+module.exports = {
+    uploadFile,
+    getFile,
+    deleteFile,
+    fileExists
+}; 

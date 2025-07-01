@@ -18,7 +18,7 @@ const app = express();
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:3001'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
@@ -70,6 +70,7 @@ app.use('/api/users', verifyToken, userRoutes);
 app.use('/api/seguros', seguroRoutes);
 app.use('/api/contratos', contratoRoutes);
 app.use('/api/pagos', pagoRoutes);
+app.use('/api/reembolsos', require('./routes/reembolsoRoutes'));
 
 // Middleware para manejo de errores de multer
 app.use((err, req, res, next) => {
