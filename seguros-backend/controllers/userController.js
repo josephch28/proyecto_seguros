@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
-const User = require('../models/user');
+const User = require('../models/User');
 
 // Función de validación para nombres y apellidos
 const isValidName = (name) => {
