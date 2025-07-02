@@ -29,9 +29,10 @@ import {
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 // Configurar axios
-axios.defaults.baseURL = 'http://localhost:3006';
+axios.defaults.baseURL = API_URL.replace('/api', '');
 axios.defaults.withCredentials = true;
 axios.defaults.headers.common['Accept'] = 'application/json';
 

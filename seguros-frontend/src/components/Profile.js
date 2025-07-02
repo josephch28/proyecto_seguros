@@ -20,6 +20,7 @@ import PhotoCamera from '@mui/icons-material/PhotoCamera';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import CloseIcon from '@mui/icons-material/Close';
+import { API_URL } from '../config';
 
 const Profile = ({ open, onClose }) => {
   const { user: authUser, checkAuth, updateUserProfile } = useAuth();
@@ -71,7 +72,7 @@ const Profile = ({ open, onClose }) => {
       console.log('Profile - Fetching user data for ID:', authUser.id);
       
       const response = await axios.get(
-        `http://localhost:3006/api/users/${authUser.id}`,
+        `${API_URL}/users/${authUser.id}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -97,7 +98,7 @@ const Profile = ({ open, onClose }) => {
           foto_perfil: userData.foto_perfil || null
         });
         if (userData.foto_perfil) {
-          setPreviewUrl(`http://localhost:3006/uploads/${userData.foto_perfil}?t=${new Date().getTime()}`);
+          setPreviewUrl(`${API_URL.replace('/api','')}/uploads/${userData.foto_perfil}?t=${new Date().getTime()}`);
         }
       } else {
         throw new Error('No se pudo obtener la información del usuario');
@@ -294,7 +295,7 @@ const Profile = ({ open, onClose }) => {
       });
 
       const response = await axios.put(
-        'http://localhost:3006/api/users/profile',
+        `${API_URL}/users/profile`,
         formDataToSend,
         {
           headers: {

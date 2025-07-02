@@ -14,6 +14,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../config';
 
 const ChangePassword = () => {
   const navigate = useNavigate();
@@ -90,7 +91,7 @@ const ChangePassword = () => {
       setError('');
 
       const response = await axios.put(
-        'http://localhost:3006/api/users/profile',
+        `${API_URL}/users/profile`,
         {
           contrasena_actual: formData.contrasena_actual,
           nueva_contrasena: formData.nueva_contrasena

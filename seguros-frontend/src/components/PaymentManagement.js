@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { AttachMoney as MoneyIcon } from '@mui/icons-material';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const PaymentManagement = () => {
   const [payments, setPayments] = useState([]);
@@ -41,7 +42,7 @@ const PaymentManagement = () => {
   const fetchPayments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3006/api/client/payments', {
+      const response = await axios.get(`${API_URL}/client/payments`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPayments(response.data);
@@ -53,7 +54,7 @@ const PaymentManagement = () => {
   const fetchSummary = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3006/api/client/payments/summary', {
+      const response = await axios.get(`${API_URL}/client/payments/summary`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSummary(response.data);
@@ -75,7 +76,7 @@ const PaymentManagement = () => {
     setLoadingPay(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:3006/api/pagos/${payment.id}/registrar`, {
+      await axios.post(`${API_URL}/pagos/${payment.id}/registrar`, {
         monto: payment.monto,
         fecha_pago: new Date().toISOString().split('T')[0],
         comprobante: 'Pago realizado por el cliente'

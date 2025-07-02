@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import { Box, CircularProgress } from '@mui/material';
+import { API_URL } from '../config';
 
 const AuthContext = createContext(null);
 
@@ -26,7 +27,7 @@ export const AuthProvider = ({ children }) => {
       ...userData,
       rol_nombre: userData.rol_nombre || userData.rol,
       foto_perfil: userData.foto_perfil ? 
-        `http://localhost:3006/uploads/${userData.foto_perfil}?t=${new Date().getTime()}` : 
+        `${API_URL.replace('/api','')}/uploads/${userData.foto_perfil}?t=${new Date().getTime()}` : 
         null,
       cambiarContrasena: Boolean(userData.cambiar_contrasena || userData.cambiarContrasena)
     };
@@ -72,7 +73,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       console.log('Haciendo petición de verificación...');
-      const response = await axios.get('http://localhost:3006/api/auth/verify', {
+      const response = await axios.get(`${API_URL}/auth/verify`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -116,7 +117,7 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Iniciando login...');
       setLoading(true);
-      const response = await axios.post('http://localhost:3006/api/auth/login', credentials);
+      const response = await axios.post(`${API_URL}/auth/login`, credentials);
       
       console.log('Respuesta de login completa:', response.data);
       

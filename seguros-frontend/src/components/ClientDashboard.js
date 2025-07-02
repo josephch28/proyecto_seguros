@@ -27,6 +27,7 @@ import { Routes, Route } from 'react-router-dom';
 import ContractManagement from './ContractManagement';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../config';
 
 const StyledCard = styled(Card)(({ theme, color }) => ({
   height: '100%',
@@ -74,7 +75,7 @@ const DashboardContent = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      const response = await axios.get('http://localhost:3006/api/client/dashboard', {
+      const response = await axios.get(`${API_URL}/client/dashboard`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

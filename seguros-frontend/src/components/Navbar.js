@@ -17,6 +17,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../context/AuthContext';
 import Profile from './Profile';
+import { API_URL } from '../config';
 
 const Navbar = ({ open, toggleDrawer, isMobile }) => {
   const { user, logout } = useAuth();
@@ -109,7 +110,7 @@ const Navbar = ({ open, toggleDrawer, isMobile }) => {
             >
               <Avatar
                 alt={`${user?.nombre} ${user?.apellido}`}
-                src={user?.foto_perfil ? `http://localhost:3006/uploads/${user.foto_perfil}` : undefined}
+                src={user?.foto_perfil ? `${API_URL.replace('/api','')}/uploads/${user.foto_perfil}` : undefined}
                 sx={{ 
                   width: { xs: 32, sm: 40 }, 
                   height: { xs: 32, sm: 40 }

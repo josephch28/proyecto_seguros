@@ -4,6 +4,7 @@ import { Routes, Route } from 'react-router-dom';
 import UserManagement from './UserManagement';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const InfoCard = ({ title, value, bgColor }) => (
   <Paper
@@ -53,7 +54,7 @@ const DashboardContent = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      const response = await axios.get('http://localhost:3006/api/admin/dashboard', {
+      const response = await axios.get(`${API_URL}/admin/dashboard`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

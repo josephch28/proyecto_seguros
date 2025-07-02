@@ -125,7 +125,7 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, apellido, correo, telefono, direccion, estado } = req.body;
+        const { nombre, apellido, correo, telefono, direccion, estado, contrasena, nombre_usuario } = req.body;
 
         // Validar campos requeridos
         if (!nombre || !apellido || !correo || !telefono) {
@@ -135,18 +135,33 @@ const updateUser = async (req, res) => {
             });
         }
 
-        // Actualizar usuario
+        let updateFields = {
+            nombre,
+            apellido,
+            correo,
+            telefono,
+            direccion: direccion || null,
+            estado: estado || 'activo',
+            nombre_usuario
+        };
+
+        // Si se proporciona una nueva contraseña, hashearla
+        if (contrasena) {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(contrasena, salt);
+            updateFields.contrasena = hashedPassword;
+            updateFields.cambiar_contrasena = false;
+        }
+
+        // Construir la consulta SQL dinámicamente
+        const updateQuery = `
+            UPDATE usuarios 
+            SET ${Object.keys(updateFields).map(key => `${key} = ?`).join(', ')}
+            WHERE id = ?`;
+
         const [result] = await pool.query(
-            `UPDATE usuarios 
-            SET nombre = ?, 
-                apellido = ?, 
-                correo = ?, 
-                telefono = ?, 
-                direccion = ?, 
-                estado = ?,
-                nombre_usuario = ?
-            WHERE id = ?`,
-            [nombre, apellido, correo, telefono, direccion || null, estado || 'activo', correo, id]
+            updateQuery,
+            [...Object.values(updateFields), id]
         );
 
         if (result.affectedRows === 0) {
@@ -278,12 +293,13 @@ const updateProfile = async (req, res) => {
             let updateFields = {
             nombre,
             apellido,
-            nombre_usuario,
             correo,
-                provincia,
-                canton,
-                direccion,
-                telefono
+            telefono,
+            direccion,
+            provincia,
+            canton,
+            nombre_usuario,
+            estado: 'activo'
             };
 
             // Si se proporciona nueva contraseña, verificar la actual
